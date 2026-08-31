@@ -1,0 +1,626 @@
+[
+  {
+    "id": "captain-america-s1",
+    "heroId": "captain-america",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "captain-america-s2",
+    "heroId": "captain-america",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "doctor-strange-s1",
+    "heroId": "doctor-strange",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "doctor-strange-s2",
+    "heroId": "doctor-strange",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "emma-frost-s1",
+    "heroId": "emma-frost",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "emma-frost-s2",
+    "heroId": "emma-frost",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "groot-s1",
+    "heroId": "groot",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "groot-s2",
+    "heroId": "groot",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hulk-s1",
+    "heroId": "hulk",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hulk-s2",
+    "heroId": "hulk",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "magneto-s1",
+    "heroId": "magneto",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "magneto-s2",
+    "heroId": "magneto",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "peni-parker-s1",
+    "heroId": "peni-parker",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "peni-parker-s2",
+    "heroId": "peni-parker",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "the-thing-s1",
+    "heroId": "the-thing",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "the-thing-s2",
+    "heroId": "the-thing",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "thor-s1",
+    "heroId": "thor",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "thor-s2",
+    "heroId": "thor",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "venom-s1",
+    "heroId": "venom",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "venom-s2",
+    "heroId": "venom",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "black-panther-s1",
+    "heroId": "black-panther",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "black-panther-s2",
+    "heroId": "black-panther",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "black-widow-s1",
+    "heroId": "black-widow",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "black-widow-s2",
+    "heroId": "black-widow",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hawkeye-s1",
+    "heroId": "hawkeye",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hawkeye-s2",
+    "heroId": "hawkeye",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hela-s1",
+    "heroId": "hela",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "hela-s2",
+    "heroId": "hela",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "human-torch-s1",
+    "heroId": "human-torch",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "human-torch-s2",
+    "heroId": "human-torch",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "iron-fist-s1",
+    "heroId": "iron-fist",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "iron-fist-s2",
+    "heroId": "iron-fist",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "iron-man-s1",
+    "heroId": "iron-man",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "iron-man-s2",
+    "heroId": "iron-man",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "magik-s1",
+    "heroId": "magik",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "magik-s2",
+    "heroId": "magik",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "mister-fantastic-s1",
+    "heroId": "mister-fantastic",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "mister-fantastic-s2",
+    "heroId": "mister-fantastic",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "moon-knight-s1",
+    "heroId": "moon-knight",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "moon-knight-s2",
+    "heroId": "moon-knight",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "namor-s1",
+    "heroId": "namor",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "namor-s2",
+    "heroId": "namor",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "psylocke-s1",
+    "heroId": "psylocke",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "psylocke-s2",
+    "heroId": "psylocke",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "scarlet-witch-s1",
+    "heroId": "scarlet-witch",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "scarlet-witch-s2",
+    "heroId": "scarlet-witch",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "spider-man-s1",
+    "heroId": "spider-man",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "spider-man-s2",
+    "heroId": "spider-man",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "squirrel-girl-s1",
+    "heroId": "squirrel-girl",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "squirrel-girl-s2",
+    "heroId": "squirrel-girl",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "star-lord-s1",
+    "heroId": "star-lord",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "star-lord-s2",
+    "heroId": "star-lord",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "storm-s1",
+    "heroId": "storm",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "storm-s2",
+    "heroId": "storm",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "the-punisher-s1",
+    "heroId": "the-punisher",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "the-punisher-s2",
+    "heroId": "the-punisher",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "winter-soldier-s1",
+    "heroId": "winter-soldier",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "winter-soldier-s2",
+    "heroId": "winter-soldier",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "wolverine-s1",
+    "heroId": "wolverine",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "wolverine-s2",
+    "heroId": "wolverine",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "adam-warlock-s1",
+    "heroId": "adam-warlock",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "adam-warlock-s2",
+    "heroId": "adam-warlock",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "cloak-and-dagger-s1",
+    "heroId": "cloak-and-dagger",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "cloak-and-dagger-s2",
+    "heroId": "cloak-and-dagger",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "invisible-woman-s1",
+    "heroId": "invisible-woman",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "invisible-woman-s2",
+    "heroId": "invisible-woman",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "jeff-the-land-shark-s1",
+    "heroId": "jeff-the-land-shark",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "jeff-the-land-shark-s2",
+    "heroId": "jeff-the-land-shark",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "loki-s1",
+    "heroId": "loki",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "loki-s2",
+    "heroId": "loki",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "luna-snow-s1",
+    "heroId": "luna-snow",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "luna-snow-s2",
+    "heroId": "luna-snow",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "mantis-s1",
+    "heroId": "mantis",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "mantis-s2",
+    "heroId": "mantis",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "rocket-raccoon-s1",
+    "heroId": "rocket-raccoon",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "rocket-raccoon-s2",
+    "heroId": "rocket-raccoon",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "ultron-s1",
+    "heroId": "ultron",
+    "slot": 1,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  },
+  {
+    "id": "ultron-s2",
+    "heroId": "ultron",
+    "slot": 2,
+    "name": "",
+    "effect": "",
+    "keybind": ""
+  }
+]
