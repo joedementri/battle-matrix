@@ -21,11 +21,15 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 
 ## Status
 
-Milestone **M2** — deterministic RNG and the headless round/phase machine. A full
-6-player match now runs end to end: draft, the round-phase loop, PvP pairing, the
-odd-count rule, phantoms, health loss, elimination, placement, and the round-40
-cap. Combat is *injected* — M2 ships a deterministic stub resolver; the real tick
-sim lands in M5.
+Milestone **M3** — the economy engine. Token income now moves through the match:
+at every round start (round 1 excepted) each living player is paid base income →
+interest on the balance held *before* that income → a win/loss streak bonus; the
++2 PvP win bonus is granted at battle resolution, and losing health pays +1 token
+per point actually lost. `previewIncome` returns the `{ base, interest, streak,
+total }` breakdown that is the single source of truth for the HUD's `◇N (+M)`
+preview; `spend` refuses an unaffordable purchase rather than clamping, so tokens
+never go negative. Combat is still the injected M2 stub; the real tick sim lands
+in M5.
 
 Delivered so far:
 
@@ -36,6 +40,11 @@ Delivered so far:
   `src/sim/types.ts` (JSON-serializable state + `serializeState` / `hashState`),
   `src/sim/match.ts` (`runMatch(seed, actions, combatResolver)`), and the
   `CombatResolver` seam.
+- **M3** — `src/sim/economy.ts`: round-start income (base → interest → streak),
+  the win/loss streak counter, the +2 PvP win bonus, HP compensation,
+  `previewIncome`, and `spend`, wired into the two seams `match.ts` left. Each
+  open economy question (PvE / tie / phantom streak rules, the HP-compensation
+  clamp) is pinned by a named `src/data/authored.ts` constant.
 
 `src/sim/` is pure and headless — no DOM, no wall clock, no `Math.random`, no
 `ui/` / `render/` imports — enforced by an ESLint override *and* a grep test.

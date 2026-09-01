@@ -36,6 +36,7 @@ import type { Role } from '../data/types';
 import { RngStream } from './rng';
 import type { RngSnapshot, Substream } from './rng';
 import { placeholderDraftLineup } from './botPolicy';
+import { applyBattleResolution, applyRoundStartIncome } from './economy';
 import { hashState } from './types';
 import type {
   Action,
@@ -50,6 +51,7 @@ import type {
   PhaseKind,
   RoundType,
   RunMatchOptions,
+  StreakKind,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -157,6 +159,8 @@ interface WorkPlayer {
   phantomLineup: string[] | null;
   recentOpponents: number[];
   lastRoundResult: BattleResult | 'none';
+  streak: number;
+  streakKind: StreakKind;
 }
 
 interface WorkMatchup {
@@ -212,6 +216,8 @@ function cloneState(w: WorkState): MatchState {
       phantomLineup: p.phantomLineup === null ? null : p.phantomLineup.slice(),
       recentOpponents: p.recentOpponents.slice(),
       lastRoundResult: p.lastRoundResult,
+      streak: p.streak,
+      streakKind: p.streakKind,
     })),
     matchups: w.matchups.map((m) => ({
       kind: m.kind,
@@ -240,8 +246,8 @@ function initState(seed: number): WorkState {
       alive: true,
       health: STARTING_HEALTH,
       eliminationHealth: null,
-      // SEAM (M3): round-start income (base 15 -> interest -> streak), the +1/HP
-      // compensation, and the +2 PvP win bonus all hook in later. M2 holds this.
+      // Round-start income, HP compensation and the +2 PvP win bonus all move
+      // `tokens` via `sim/economy.ts`, hooked in at the two seams below.
       tokens: STARTING_TOKENS,
       placement: null,
       eliminatedRound: null,
@@ -252,6 +258,8 @@ function initState(seed: number): WorkState {
       phantomLineup: null,
       recentOpponents: [],
       lastRoundResult: 'none',
+      streak: 0,
+      streakKind: 'none',
     });
   }
   return {
@@ -606,11 +614,31 @@ function runBattlePhase(
     // mirror/phantom win -> nothing; beating one costs the source owner nothing.
   }
 
-  // Apply. Health may dip <= 0 here; the batch step floors it.
+  // Apply health loss, then hand each side's result to the M3 economy engine
+  // (streak progression, +2 PvP win bonus, HP compensation). Health may dip
+  // <= 0 here; the batch step floors it. Compensation is against pre-loss
+  // health, so capture it before `applyLoss`.
   for (const m of matchups) {
+    const healthBeforeA = work.players[m.a]!.health;
     applyLoss(work, m.a, m.healthLossA);
-    if (m.kind === 'pvp') applyLoss(work, m.b, m.healthLossB);
-    // SEAM (M3): `player.tokens += healthLost` (HP compensation) hooks in here.
+    applyBattleResolution(work, {
+      playerId: m.a,
+      result: m.resultA,
+      matchupKind: m.kind,
+      healthBefore: healthBeforeA,
+      rawHealthLoss: m.healthLossA,
+    });
+    if (m.kind === 'pvp') {
+      const healthBeforeB = work.players[m.b]!.health;
+      applyLoss(work, m.b, m.healthLossB);
+      applyBattleResolution(work, {
+        playerId: m.b,
+        result: m.resultA === null ? null : invert(m.resultA),
+        matchupKind: m.kind,
+        healthBefore: healthBeforeB,
+        rawHealthLoss: m.healthLossB,
+      });
+    }
   }
 
   // Results + opponent history.
@@ -733,10 +761,16 @@ export function runMatch(
       work.humanConfirmedPhase = false;
       work.matchups = [];
 
+      if (work.phaseKind === 'moduleDraw') {
+        // SEAM (M3): base -> interest -> streak income for every living player.
+        // No-op on round 1 (the `1-1` screenshot shows every player at <>10).
+        applyRoundStartIncome(work);
+      }
+
       const matchFinished = work.phaseKind === 'battle'
         ? runBattlePhase(work, rng, combat, maxRounds)
         : false;
-      // moduleDraw: SEAM (M3 round-start income, M4 shop).
+      // moduleDraw: SEAM (M4 shop) — round-start income applied just above.
       // selectPosition: SEAM (M6 deploy).
       // reward: SEAM (M6 — grants PRACTICE_REWARD_COUNTS[...] Strengthen picks).
 

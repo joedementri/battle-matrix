@@ -105,6 +105,64 @@ export const PVP_WIN_TOKEN_BONUS_TIMING = 'atBattleResolution';
 export const INTEREST_CAP = 5;
 
 // ===========================================================================
+// AUTHORED — M3 economy engine: the calls the plan leaves open or contradicts
+// ===========================================================================
+
+/**
+ * HP compensation clamp — AUTHORED. The *rate* ("+1 token per 1 health lost") is
+ * canonical (constants.ts → HEALTH_COMPENSATION_PER_HP); what it multiplies is
+ * not. A killing blow overshoots: a player on 3 HP hit for a raw 5 only *loses*
+ * 3. `'actualHealthLost'` pays for the health actually removed —
+ * `min(rawLoss, healthBefore)` floored at 0 — on the principle that you cannot
+ * be compensated for health you never had. `'rawLossAmount'` would pay the
+ * unclamped formula output (5). Falsified by footage of a near-dead player whose
+ * token gain on a fatal loss exceeds the health they had left.
+ */
+export const HP_COMPENSATION_CLAMP: 'actualHealthLost' | 'rawLossAmount' =
+  'actualHealthLost';
+
+/**
+ * Does a Practice (PvE) round touch the win/loss streak? — AUTHORED. No: the
+ * streak is PvP-only. PvE is health-neutral (see match.ts) and the scoreboard
+ * streak badge tracks player-vs-player form. Falsified by a scoreboard where a
+ * streak badge's count changes across a Practice round with no PvP round between
+ * the two observations.
+ */
+export const PVE_TOUCHES_STREAK: boolean = false;
+
+/**
+ * What a PvP tie does to the streak — AUTHORED. `'unchanged'`: a tie is neither
+ * a win nor a loss, so the counter and its kind are left intact (a 3-win streak
+ * survives a tie as a 3-win streak). It still costs health (`ceil(loss / 2)`)
+ * and therefore still pays HP compensation. Alternative: `'breakToNone'` (a tie
+ * zeroes the streak). Falsified by footage where a tie visibly resets or zeroes
+ * a streak badge.
+ */
+export const TIE_STREAK_BEHAVIOUR: 'unchanged' | 'breakToNone' = 'unchanged';
+
+/**
+ * Does beating a phantom or mirror pay? — AUTHORED. No: the plan says beating one
+ * "gives you nothing", so a win against a phantom/mirror grants no +2 and no
+ * win-streak increment (it does not even reset an existing loss streak). Losing
+ * to one is still a real loss — it advances the loss streak and pays HP
+ * compensation. Falsified by footage where a phantom/mirror win advances a
+ * streak badge or moves the token counter.
+ */
+export const PHANTOM_MIRROR_WIN_PAYS: boolean = false;
+
+/**
+ * Does a *tie* against a phantom or mirror advance the loss streak? — AUTHORED,
+ * and the one place two plan rulings collide. The general tie ruling says a tie
+ * leaves the streak unchanged; the phantom/mirror ruling says "losing OR tying
+ * against one … does advance the loss streak". This encodes the phantom ruling's
+ * literal, more-specific wording: against a team that cannot truly contest you,
+ * only a clean win keeps you neutral. Set `false` to make phantom/mirror ties
+ * defer to TIE_STREAK_BEHAVIOUR instead. Falsified by a scoreboard where a
+ * phantom/mirror tie leaves a win-streak badge intact.
+ */
+export const PHANTOM_MIRROR_TIE_ADVANCES_LOSS_STREAK: boolean = true;
+
+// ===========================================================================
 // AUTHORED, but stored elsewhere by the ledger's deliberate exception
 // ===========================================================================
 
@@ -215,6 +273,16 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
     'AUTHORED. Granted at battle resolution, not round start — the only reading consistent with both the wiki (+2 exists) and the screenshots (no preview includes it).',
   INTEREST_CAP:
     'AUTHORED. NOT in the screenshot-CONFIRMED list. The plan assumes "max +5" but the sole low-token preview (0(+19)) shows 0 interest regardless of any cap. Falsified by a preview showing interest > 5.',
+  HP_COMPENSATION_CLAMP:
+    "AUTHORED. The rate is canonical; the clamp is not. 'actualHealthLost' = min(rawLoss, healthBefore) floored at 0 — no compensation for health never held (3 HP hit for 5 pays 3, not 5). Falsified by footage of a fatal-loss token gain exceeding the player's remaining health.",
+  PVE_TOUCHES_STREAK:
+    'AUTHORED. Streak is PvP-only — PvE is health-neutral and the badge tracks PvP form. Falsified by a streak-badge count change across a Practice round with no PvP round between observations.',
+  TIE_STREAK_BEHAVIOUR:
+    "AUTHORED. 'unchanged' — a PvP tie is neither win nor loss and leaves the streak counter and kind intact (it still costs health, so it still pays compensation). Falsified by footage where a tie resets or zeroes a streak badge.",
+  PHANTOM_MIRROR_WIN_PAYS:
+    'AUTHORED. The plan: beating a phantom/mirror "gives you nothing" — no +2, no win-streak increment, no reset of an existing loss streak. Falsified by footage where a phantom/mirror win advances a streak badge or the token counter.',
+  PHANTOM_MIRROR_TIE_ADVANCES_LOSS_STREAK:
+    'AUTHORED. Resolves a collision between the general tie ruling ("unchanged") and the phantom ruling ("losing or tying … does advance the loss streak") in favour of the more specific phantom wording. Set false to defer to TIE_STREAK_BEHAVIOUR. Falsified by a phantom/mirror tie that leaves a win-streak badge intact.',
   AUTHORED_ELSEWHERE:
     "Pointer, not a value. Per-hero combat stats are AUTHORED but stored in heroes.json → combat by the ledger's deliberate exception; base health there is canonical.",
   STRENGTHEN_JSON_IS_SKELETON:

@@ -39,6 +39,14 @@ export type MatchupKind = 'pvp' | 'pve' | 'phantom' | 'mirror';
 
 export type BattleResult = 'win' | 'loss' | 'tie';
 
+/**
+ * The *kind* of the player's current PvP win/loss streak. `none` until the first
+ * non-tie PvP result is recorded; a PvP tie never changes it. Distinct from
+ * `lastRoundResult`, which is the literal most-recent round outcome — after a
+ * tie that reads `tie` while `streakKind` still holds the surviving streak.
+ */
+export type StreakKind = 'win' | 'loss' | 'none';
+
 export type MatchStatus = 'drafting' | 'inRound' | 'complete';
 
 export type LineupSource = 'human' | 'auto';
@@ -139,7 +147,11 @@ export interface PlayerState {
    * while alive. Used only to order a simultaneously-eliminated batch.
    */
   readonly eliminationHealth: number | null;
-  /** M2: fixed at the canonical starting value. The income seam is M3. */
+  /**
+   * Spendable tokens. Round-start income, HP compensation and the +2 PvP win
+   * bonus all move this (see `sim/economy.ts`); `economy.spend()` is the only
+   * sanctioned debit and never lets it go negative.
+   */
   readonly tokens: number;
   readonly placement: number | null;
   readonly eliminatedRound: number | null;
@@ -162,6 +174,16 @@ export interface PlayerState {
    */
   readonly recentOpponents: readonly number[];
   readonly lastRoundResult: BattleResult | 'none';
+
+  /**
+   * Consecutive same-result PvP streak counter. `0` while `streakKind` is
+   * `none` (no non-tie PvP result yet). The first win/loss sets it to
+   * `STREAK_START` (1); each consecutive same-kind result adds `STREAK_STEP`;
+   * an opposite result resets it to `STREAK_START`; a PvP tie leaves it. The
+   * round-start income bonus is `min(streak, STREAK_BONUS_CAP)`.
+   */
+  readonly streak: number;
+  readonly streakKind: StreakKind;
 }
 
 export interface Matchup {
