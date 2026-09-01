@@ -172,6 +172,72 @@ export const PROTOCOL_TIER_BONUSES: Readonly<
 export const SPEED_UP_DAMAGE_BONUS_PCT = 120;
 export const SPEED_UP_DAMAGE_MULTIPLIER = 1 + SPEED_UP_DAMAGE_BONUS_PCT / 100;
 
+// ---------------------------------------------------------------------------
+// Combat tick — locked project decision (M5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Locked with the user (Context table): "2D top-down real-time deterministic
+ * tick sim (30 Hz)". The whole simulation advances on this fixed integer tick;
+ * there is no wall clock anywhere in `src/sim/`.
+ */
+export const TICK_RATE_HZ = 30;
+/** Seconds per tick — the `dt` every integrator in `src/sim/combat.ts` uses. */
+export const TICK_DT_SECONDS = 1 / TICK_RATE_HZ;
+
+/**
+ * Plan rule (M5 tick section): a unit re-acquires a target only after that
+ * target has been out of range for **more than** 0.5 s, tracked by a per-unit
+ * out-of-range timer (not a per-tick distance check).
+ */
+export const TARGET_REACQUIRE_GRACE_SECONDS = 0.5;
+
+// ---------------------------------------------------------------------------
+// Behavioural Base Module parameters — from the verbatim module tables (M5)
+// ---------------------------------------------------------------------------
+// Every magnitude below is transcribed word-for-word from the plan's "Base
+// Module tables"; only the *durations expressed in ticks* are derived
+// (seconds × TICK_RATE_HZ). Anything the tables leave unspecified — Rampage
+// duration, the Critical Counter "near-death" fraction, the Vulnerability stack
+// cap / decay — is AUTHORED and lives in `authored.ts`.
+
+/** Critical Damage Shell: "80% damage reduction for 3s the first time their health drops below 30%". */
+export const CRITICAL_DAMAGE_SHELL = {
+  reductionPct: 80,
+  durationSeconds: 3,
+  healthFraction: 0.3,
+} as const;
+
+/** Backup Rebirth revive health: Fortress 30% · Onslaught 40% · Equilibrium 10% per unique role. */
+export const BACKUP_REBIRTH_REVIVE_FRACTION = {
+  fortress: 0.3,
+  onslaught: 0.4,
+  equilibriumPerUniqueRole: 0.1,
+} as const;
+
+/** Infinite Drive: chance an ultimate does NOT consume energy — 40% (Fortress/Onslaught/Reboot), 10% (Equilibrium). */
+export const INFINITE_DRIVE_KEEP_CHANCE = {
+  fortress: 0.4,
+  onslaught: 0.4,
+  reboot: 0.4,
+  equilibrium: 0.1,
+} as const;
+
+/** Double Heal: "40% chance each heal triggers again". */
+export const DOUBLE_HEAL_RETRIGGER_CHANCE = 0.4;
+
+/** Critical Counter: "damage taken over the next 3s converts to healing". */
+export const CRITICAL_COUNTER_DURATION_SECONDS = 3;
+
+/** Annihilator Fury (Rampage): "+40% attack speed and lifesteal" (and a full heal) after each Final Hit. */
+export const RAMPAGE_ATTACK_SPEED_AND_LIFESTEAL_PCT = 40;
+
+/** Cumulative Dual Enhancement: "+1% damage & healing every second" per unique role. */
+export const CUMULATIVE_DUAL_PCT_PER_SECOND_PER_ROLE = 1;
+
+/** Initial Damage / Healing / Dual Enhancement: the window is "10s at round start". */
+export const INITIAL_ROUND_WINDOW_SECONDS = 10;
+
 /** Canonical: the six Ultron Drone colours, one picked at random per match. */
 export const DRONE_COLOURS = [
   'Blue',

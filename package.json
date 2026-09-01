@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:determinism": "vitest run tests/determinism.spec.ts",
+    "test:determinism": "vitest run tests/determinism.spec.ts tests/combat.spec.ts tests/replay.spec.ts",
     "lint": "eslint ."
   },
   "dependencies": {},

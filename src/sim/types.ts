@@ -123,6 +123,14 @@ export interface CombatOutcome {
    * formula takes a single `loss`, so one number is sufficient.
    */
   readonly survivingUnits: number;
+  /**
+   * Both sides' surviving unit counts (0..6). Optional so the M2 stub and the
+   * hand-rolled test resolvers stay valid; the real M5 resolver always fills
+   * them. M9's HUD and any "loser's-perspective survivor count" caller read
+   * these; `match.ts` needs only `survivingUnits`.
+   */
+  readonly survivorsSideA?: number;
+  readonly survivorsSideB?: number;
 }
 
 /** M5 provides a real implementation; M2 provides `createStubCombatResolver()`. */

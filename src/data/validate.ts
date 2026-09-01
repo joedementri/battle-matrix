@@ -39,6 +39,7 @@ import type {
   Role,
   StrengthenModuleSkeleton,
   Targeting,
+  UltArchetype,
 } from './types';
 
 // The JSON files are untyped literals; these views are proven correct by the
@@ -120,6 +121,14 @@ const ROLE_COUNTS: Readonly<Record<Role, number>> = {
 };
 
 const TARGETINGS: readonly Targeting[] = ['nearest', 'lowestMaxHealth', 'highestMaxHealth'];
+const ULT_ARCHETYPES: readonly UltArchetype[] = [
+  'singleTargetBurst',
+  'aoeBurst',
+  'sustainedBeam',
+  'teamHealBurst',
+  'shieldDamageReduction',
+  'selfBuff',
+];
 const ROLES: readonly Role[] = ['vanguard', 'duelist', 'strategist'];
 const PROTOCOLS: readonly Protocol[] = ['fortress', 'onslaught', 'reboot', 'equilibrium'];
 const RARITIES: readonly Rarity[] = ['common', 'rare', 'legendary'];
@@ -210,6 +219,13 @@ function validateHeroes(add: Add): void {
       add('heroes/targeting-value', `${h.id}: bad targeting "${h.targeting}"`);
     }
 
+    if (h.ult === undefined || !ULT_ARCHETYPES.includes(h.ult.archetype)) {
+      add(
+        'heroes/ult-archetype',
+        `${h.id}: ult.archetype must be one of ${ULT_ARCHETYPES.join(' / ')}, got ${JSON.stringify(h.ult)}`,
+      );
+    }
+
     validateHeroCombat(add, h);
   }
 
@@ -222,6 +238,13 @@ function validateHeroes(add: Add): void {
   const canonKeys = Object.keys(CANONICAL_BASE_HEALTH);
   if (canonKeys.length !== 39) {
     add('heroes/base-health-table', `canonical base-health table has ${canonKeys.length} rows, expected 39`);
+  }
+
+  // Every ult archetype is represented — a mapping that silently collapses to one
+  // or two archetypes is a bug, not a balance choice.
+  const usedArchetypes = new Set(heroes.map((h) => h.ult?.archetype).filter(Boolean));
+  for (const a of ULT_ARCHETYPES) {
+    if (!usedArchetypes.has(a)) add('heroes/ult-archetype-unused', `no hero maps to ult archetype "${a}"`);
   }
 
   // Targeting partitions the roster: every hero in exactly one of the three lists.

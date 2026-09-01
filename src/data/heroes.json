@@ -5,7 +5,8 @@
     "role": "vanguard",
     "baseHealth": 575,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 78, "attackType": "melee", "attackRange": 4, "attackSpeed": 1.3, "moveSpeed": 3.0 }
+    "combat": { "dps": 78, "attackType": "melee", "attackRange": 4, "attackSpeed": 1.3, "moveSpeed": 3 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "doctor-strange",
@@ -13,7 +14,8 @@
     "role": "vanguard",
     "baseHealth": 575,
     "targeting": "nearest",
-    "combat": { "dps": 62, "attackType": "ranged", "attackRange": 16, "attackSpeed": 1.1, "moveSpeed": 3.0 }
+    "combat": { "dps": 62, "attackType": "ranged", "attackRange": 16, "attackSpeed": 1.1, "moveSpeed": 3 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "emma-frost",
@@ -21,7 +23,8 @@
     "role": "vanguard",
     "baseHealth": 600,
     "targeting": "nearest",
-    "combat": { "dps": 60, "attackType": "ranged", "attackRange": 13, "attackSpeed": 1.0, "moveSpeed": 3.0 }
+    "combat": { "dps": 60, "attackType": "ranged", "attackRange": 13, "attackSpeed": 1, "moveSpeed": 3 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "groot",
@@ -29,7 +32,8 @@
     "role": "vanguard",
     "baseHealth": 700,
     "targeting": "nearest",
-    "combat": { "dps": 66, "attackType": "melee", "attackRange": 6, "attackSpeed": 0.9, "moveSpeed": 3.0 }
+    "combat": { "dps": 66, "attackType": "melee", "attackRange": 6, "attackSpeed": 0.9, "moveSpeed": 3 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "hulk",
@@ -37,7 +41,8 @@
     "role": "vanguard",
     "baseHealth": 700,
     "targeting": "nearest",
-    "combat": { "dps": 85, "attackType": "melee", "attackRange": 4, "attackSpeed": 1.1, "moveSpeed": 3.0 },
+    "combat": { "dps": 85, "attackType": "melee", "attackRange": 4, "attackSpeed": 1.1, "moveSpeed": 3 },
+    "ult": { "archetype": "selfBuff" },
     "note": "Wiki infobox lists 200 (Bruce Banner) / 700 (Hulk). Canonical value is 700 per the plan's roster table."
   },
   {
@@ -46,7 +51,8 @@
     "role": "vanguard",
     "baseHealth": 650,
     "targeting": "nearest",
-    "combat": { "dps": 58, "attackType": "ranged", "attackRange": 15, "attackSpeed": 1.0, "moveSpeed": 3.0 }
+    "combat": { "dps": 58, "attackType": "ranged", "attackRange": 15, "attackSpeed": 1, "moveSpeed": 3 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "peni-parker",
@@ -54,7 +60,8 @@
     "role": "vanguard",
     "baseHealth": 650,
     "targeting": "nearest",
-    "combat": { "dps": 64, "attackType": "ranged", "attackRange": 12, "attackSpeed": 1.4, "moveSpeed": 3.0 }
+    "combat": { "dps": 64, "attackType": "ranged", "attackRange": 12, "attackSpeed": 1.4, "moveSpeed": 3 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "the-thing",
@@ -62,7 +69,8 @@
     "role": "vanguard",
     "baseHealth": 700,
     "targeting": "nearest",
-    "combat": { "dps": 82, "attackType": "melee", "attackRange": 4, "attackSpeed": 1.0, "moveSpeed": 3.0 }
+    "combat": { "dps": 82, "attackType": "melee", "attackRange": 4, "attackSpeed": 1, "moveSpeed": 3 },
+    "ult": { "archetype": "selfBuff" }
   },
   {
     "id": "thor",
@@ -70,7 +78,8 @@
     "role": "vanguard",
     "baseHealth": 600,
     "targeting": "nearest",
-    "combat": { "dps": 74, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.2, "moveSpeed": 3.0 }
+    "combat": { "dps": 74, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.2, "moveSpeed": 3 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "venom",
@@ -78,7 +87,8 @@
     "role": "vanguard",
     "baseHealth": 675,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 70, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.1, "moveSpeed": 3.0 }
+    "combat": { "dps": 70, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.1, "moveSpeed": 3 },
+    "ult": { "archetype": "selfBuff" }
   },
 
   {
@@ -87,7 +97,8 @@
     "role": "duelist",
     "baseHealth": 275,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 165, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.6, "moveSpeed": 4.4 }
+    "combat": { "dps": 165, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.6, "moveSpeed": 4.4 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "black-widow",
@@ -95,7 +106,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 115, "attackType": "sniper", "attackRange": 32, "attackSpeed": 0.9, "moveSpeed": 3.8 }
+    "combat": { "dps": 115, "attackType": "sniper", "attackRange": 32, "attackSpeed": 0.9, "moveSpeed": 3.8 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "hawkeye",
@@ -103,7 +115,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 120, "attackType": "sniper", "attackRange": 34, "attackSpeed": 0.8, "moveSpeed": 3.7 }
+    "combat": { "dps": 120, "attackType": "sniper", "attackRange": 34, "attackSpeed": 0.8, "moveSpeed": 3.7 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "hela",
@@ -111,7 +124,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 128, "attackType": "sniper", "attackRange": 28, "attackSpeed": 1.0, "moveSpeed": 3.7 }
+    "combat": { "dps": 128, "attackType": "sniper", "attackRange": 28, "attackSpeed": 1, "moveSpeed": 3.7 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "human-torch",
@@ -119,7 +133,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 140, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.1, "moveSpeed": 4.0 }
+    "combat": { "dps": 140, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.1, "moveSpeed": 4 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "iron-fist",
@@ -127,7 +142,8 @@
     "role": "duelist",
     "baseHealth": 300,
     "targeting": "nearest",
-    "combat": { "dps": 158, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.7, "moveSpeed": 4.4 }
+    "combat": { "dps": 158, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.7, "moveSpeed": 4.4 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "iron-man",
@@ -135,7 +151,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 138, "attackType": "ranged", "attackRange": 24, "attackSpeed": 1.2, "moveSpeed": 4.0 }
+    "combat": { "dps": 138, "attackType": "ranged", "attackRange": 24, "attackSpeed": 1.2, "moveSpeed": 4 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "magik",
@@ -143,7 +160,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 150, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.2 }
+    "combat": { "dps": 150, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.2 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "mister-fantastic",
@@ -151,7 +169,8 @@
     "role": "duelist",
     "baseHealth": 375,
     "targeting": "nearest",
-    "combat": { "dps": 135, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1.2, "moveSpeed": 3.9 }
+    "combat": { "dps": 135, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1.2, "moveSpeed": 3.9 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "moon-knight",
@@ -159,7 +178,8 @@
     "role": "duelist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 132, "attackType": "sniper", "attackRange": 26, "attackSpeed": 1.0, "moveSpeed": 3.8 }
+    "combat": { "dps": 132, "attackType": "sniper", "attackRange": 26, "attackSpeed": 1, "moveSpeed": 3.8 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "namor",
@@ -167,7 +187,8 @@
     "role": "duelist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 134, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1.0, "moveSpeed": 3.7 }
+    "combat": { "dps": 134, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1, "moveSpeed": 3.7 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "psylocke",
@@ -175,7 +196,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 152, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.3 }
+    "combat": { "dps": 152, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.3 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "scarlet-witch",
@@ -183,7 +205,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 136, "attackType": "ranged", "attackRange": 23, "attackSpeed": 1.1, "moveSpeed": 3.8 }
+    "combat": { "dps": 136, "attackType": "ranged", "attackRange": 23, "attackSpeed": 1.1, "moveSpeed": 3.8 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "spider-man",
@@ -191,7 +214,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "lowestMaxHealth",
-    "combat": { "dps": 148, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.4 }
+    "combat": { "dps": 148, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.5, "moveSpeed": 4.4 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "squirrel-girl",
@@ -199,7 +223,8 @@
     "role": "duelist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 122, "attackType": "sniper", "attackRange": 25, "attackSpeed": 0.9, "moveSpeed": 3.7 }
+    "combat": { "dps": 122, "attackType": "sniper", "attackRange": 25, "attackSpeed": 0.9, "moveSpeed": 3.7 },
+    "ult": { "archetype": "aoeBurst" }
   },
   {
     "id": "star-lord",
@@ -207,7 +232,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 150, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.6, "moveSpeed": 4.2 }
+    "combat": { "dps": 150, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.6, "moveSpeed": 4.2 },
+    "ult": { "archetype": "sustainedBeam" }
   },
   {
     "id": "storm",
@@ -215,7 +241,8 @@
     "role": "duelist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 142, "attackType": "ranged", "attackRange": 24, "attackSpeed": 1.2, "moveSpeed": 3.9 }
+    "combat": { "dps": 142, "attackType": "ranged", "attackRange": 24, "attackSpeed": 1.2, "moveSpeed": 3.9 },
+    "ult": { "archetype": "sustainedBeam" }
   },
   {
     "id": "the-punisher",
@@ -223,7 +250,8 @@
     "role": "duelist",
     "baseHealth": 300,
     "targeting": "nearest",
-    "combat": { "dps": 130, "attackType": "sniper", "attackRange": 27, "attackSpeed": 1.3, "moveSpeed": 3.6 }
+    "combat": { "dps": 130, "attackType": "sniper", "attackRange": 27, "attackSpeed": 1.3, "moveSpeed": 3.6 },
+    "ult": { "archetype": "sustainedBeam" }
   },
   {
     "id": "winter-soldier",
@@ -231,7 +259,8 @@
     "role": "duelist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 144, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1.0, "moveSpeed": 3.8 }
+    "combat": { "dps": 144, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1, "moveSpeed": 3.8 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
   {
     "id": "wolverine",
@@ -239,7 +268,8 @@
     "role": "duelist",
     "baseHealth": 350,
     "targeting": "highestMaxHealth",
-    "combat": { "dps": 160, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.6, "moveSpeed": 4.3 }
+    "combat": { "dps": 160, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.6, "moveSpeed": 4.3 },
+    "ult": { "archetype": "singleTargetBurst" }
   },
 
   {
@@ -248,7 +278,8 @@
     "role": "strategist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 58, "healPerSecond": 78, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1.0, "moveSpeed": 3.4 }
+    "combat": { "dps": 58, "healPerSecond": 78, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "cloak-and-dagger",
@@ -256,7 +287,8 @@
     "role": "strategist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 62, "healPerSecond": 80, "attackType": "ranged", "attackRange": 18, "attackSpeed": 1.1, "moveSpeed": 3.4 }
+    "combat": { "dps": 62, "healPerSecond": 80, "attackType": "ranged", "attackRange": 18, "attackSpeed": 1.1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "invisible-woman",
@@ -264,7 +296,8 @@
     "role": "strategist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 55, "healPerSecond": 85, "attackType": "ranged", "attackRange": 19, "attackSpeed": 1.0, "moveSpeed": 3.4 }
+    "combat": { "dps": 55, "healPerSecond": 85, "attackType": "ranged", "attackRange": 19, "attackSpeed": 1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "shieldDamageReduction" }
   },
   {
     "id": "jeff-the-land-shark",
@@ -272,7 +305,8 @@
     "role": "strategist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 50, "healPerSecond": 90, "attackType": "ranged", "attackRange": 16, "attackSpeed": 1.1, "moveSpeed": 3.4 }
+    "combat": { "dps": 50, "healPerSecond": 90, "attackType": "ranged", "attackRange": 16, "attackSpeed": 1.1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "loki",
@@ -280,7 +314,8 @@
     "role": "strategist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 60, "healPerSecond": 82, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1.0, "moveSpeed": 3.4 }
+    "combat": { "dps": 60, "healPerSecond": 82, "attackType": "ranged", "attackRange": 21, "attackSpeed": 1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "luna-snow",
@@ -288,7 +323,8 @@
     "role": "strategist",
     "baseHealth": 275,
     "targeting": "nearest",
-    "combat": { "dps": 66, "healPerSecond": 76, "attackType": "ranged", "attackRange": 19, "attackSpeed": 1.2, "moveSpeed": 3.4 }
+    "combat": { "dps": 66, "healPerSecond": 76, "attackType": "ranged", "attackRange": 19, "attackSpeed": 1.2, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "mantis",
@@ -296,7 +332,8 @@
     "role": "strategist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 64, "healPerSecond": 74, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1.1, "moveSpeed": 3.4 }
+    "combat": { "dps": 64, "healPerSecond": 74, "attackType": "ranged", "attackRange": 20, "attackSpeed": 1.1, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "rocket-raccoon",
@@ -304,7 +341,8 @@
     "role": "strategist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 70, "healPerSecond": 68, "attackType": "ranged", "attackRange": 18, "attackSpeed": 1.3, "moveSpeed": 3.4 }
+    "combat": { "dps": 70, "healPerSecond": 68, "attackType": "ranged", "attackRange": 18, "attackSpeed": 1.3, "moveSpeed": 3.4 },
+    "ult": { "archetype": "teamHealBurst" }
   },
   {
     "id": "ultron",
@@ -312,6 +350,7 @@
     "role": "strategist",
     "baseHealth": 250,
     "targeting": "nearest",
-    "combat": { "dps": 68, "healPerSecond": 72, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.2, "moveSpeed": 3.4 }
+    "combat": { "dps": 68, "healPerSecond": 72, "attackType": "ranged", "attackRange": 22, "attackSpeed": 1.2, "moveSpeed": 3.4 },
+    "ult": { "archetype": "aoeBurst" }
   }
 ]

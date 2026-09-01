@@ -47,6 +47,16 @@ const FORBIDDEN: readonly Rule[] = [
   { name: 'sessionStorage', re: /\bsessionStorage\b/ },
   { name: 'indexedDB', re: /\bindexedDB\b/ },
   { name: 'Math.random', re: /\bMath\s*\.\s*random\b/ },
+  // M5: transcendental / implementation-defined math is banned in `src/sim/`.
+  // `+ - * /` and `Math.sqrt` are IEEE-754 exact and reproduce on every engine;
+  // `Math.sin/cos/tan/atan2/pow/hypot/log/exp/cbrt/...` and the `**` operator
+  // are implementation-defined and can differ between engines and versions.
+  // Do direction with normalised vector math (sqrt only), never angles.
+  {
+    name: 'transcendental Math (sin/cos/tan/atan2/pow/hypot/log/exp/cbrt/...)',
+    re: /\bMath\s*\.\s*(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|pow|exp|expm1|log|log2|log10|log1p|cbrt|hypot)\b/,
+  },
+  { name: 'exponentiation operator **', re: /\*\*/ },
   { name: 'Date (constructor / statics)', re: /\bnew\s+Date\b|\bDate\s*\.\s*(now|parse|UTC)\b/ },
   { name: 'Date type / identifier', re: /\bDate\b/ },
   { name: 'performance.now', re: /\bperformance\s*\.\s*now\b/ },

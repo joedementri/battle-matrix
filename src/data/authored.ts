@@ -13,6 +13,7 @@
  * Data files import nothing from `ui/` or `render/`.
  */
 
+import { TICK_RATE_HZ } from './constants';
 import type { AttackType, Role } from './types';
 
 // ===========================================================================
@@ -236,6 +237,120 @@ export const SHOP_LOCK_BEHAVIOUR: {
 };
 
 // ===========================================================================
+// AUTHORED — M5 combat simulation core (headless)
+// ===========================================================================
+
+/**
+ * Arena geometry — AUTHORED. The plan fixes the unit convention (range / move
+ * are *arena units*, not board cells) and the 6×4 deploy grid, but not the
+ * arena's metric size. One deploy-grid cell is `ARENA_CELL_SIZE` arena units;
+ * the two teams' front rows start `ARENA_TEAM_SEPARATION` apart. Resulting
+ * footprint: 30 wide (6 cells) × 60 deep (2 × 3 back-to-front cells + the
+ * separation). Sized so range genuinely differentiates heroes: a 20–34 Duelist
+ * sniper on the front row reaches the enemy front row at spawn (sep 24) but not
+ * its back row (sep 24 + 18 = 42); a 16–22 Strategist and every melee unit must
+ * close ground first. Falsified by footage that establishes an arena scale
+ * contradicting these ratios.
+ */
+export const ARENA_CELL_SIZE = 6;
+export const ARENA_TEAM_SEPARATION = 24;
+
+/**
+ * Movement model — AUTHORED (the plan recommends exactly this). Each tick a unit
+ * steers straight at its target and advances `moveSpeed × dt`, with no unit-unit
+ * collision — a visual separation nudge is M9's problem. Direction uses
+ * normalised vector math (sqrt only), never angles, so it reproduces bit-for-bit
+ * across JS engines and versions.
+ */
+export const MOVEMENT_MODEL = 'steerStraightNoCollision' as const;
+
+/**
+ * Ult-energy conversion rates — AUTHORED. Fraction of a full ult bar gained per
+ * 1 point of damage dealt / damage taken / healing done, *before* the unit's
+ * Charge Acceleration multiplier. Tuned so a typical unit reaches its first ult
+ * around 25–40 s into an even fight and rarely casts more than twice before the
+ * tie cap. Falsified by footage timing ult casts materially faster or slower.
+ */
+export const ULT_ENERGY_PER_DAMAGE_DEALT = 0.00012;
+export const ULT_ENERGY_PER_DAMAGE_TAKEN = 0.0002;
+export const ULT_ENERGY_PER_HEALING_DONE = 0.00016;
+
+/**
+ * The two different limits, kept apart (plan rule 3) — AUTHORED.
+ * `BATTLE_TIE_CAP_TICKS` is a GAME RULE: the 40 s battle clock plus the 20 s
+ * Speed Up sub-stage (`PHASE_TIMERS_SECONDS`), after which the battle ends as a
+ * **tie**. `BATTLE_MAX_TICKS` is a paranoid BUG GUARD at twice the tie cap; the
+ * sim **throws** if it is ever reached (a bug report, not a game outcome), so it
+ * must stay strictly greater than the tie cap and unreachable in normal play.
+ */
+export const BATTLE_TIE_CAP_TICKS =
+  (PHASE_TIMERS_SECONDS.battle + PHASE_TIMERS_SECONDS.speedUp) * TICK_RATE_HZ;
+export const BATTLE_MAX_TICKS = BATTLE_TIE_CAP_TICKS * 2;
+
+/**
+ * When the Speed Up Protocol sub-stage begins inside a battle — AUTHORED, = the
+ * 40 s base battle clock (`PHASE_TIMERS_SECONDS.battle`) in ticks. At this tick
+ * one battle-level flag flips and the damage function multiplies by exactly
+ * `SPEED_UP_DAMAGE_MULTIPLIER` (2.2) **once** — never re-applied per tick. The
+ * +120 % magnitude itself is canonical (`constants.ts`). The string form
+ * `SPEED_UP_TRIGGER` ('battleTimerZero') above says the same thing semantically.
+ */
+export const SPEED_UP_TRIGGER_TICKS = PHASE_TIMERS_SECONDS.battle * TICK_RATE_HZ;
+
+/**
+ * Rampage (Annihilator Fury) duration — AUTHORED. The module text gives the
+ * bonus (+40 % attack speed & lifesteal, full heal) but no duration: 5 s,
+ * refreshed on every Final Hit. Falsified by footage timing Rampage.
+ */
+export const RAMPAGE_DURATION_TICKS = 5 * TICK_RATE_HZ;
+
+/**
+ * Critical Counter "near-death" threshold — AUTHORED. The module text says "the
+ * first time a Strategist enters a near-death state" without defining it; mirror
+ * Critical Damage Shell's 30 % health line. Falsified by footage pinning the
+ * trigger to a different fraction.
+ */
+export const CRITICAL_COUNTER_NEAR_DEATH_FRACTION = 0.3;
+
+/**
+ * Vulnerability Mark stacking — AUTHORED. The module text says "1 stack … on
+ * damage" with no cap or decay: cap at 5 stacks; a stack set falls off 3 s after
+ * the last application. Total added damage-taken % = stacks × the applying
+ * module's per-stack %. Falsified by footage showing a different cap or decay.
+ */
+export const VULNERABILITY_MAX_STACKS = 5;
+export const VULNERABILITY_DURATION_TICKS = 3 * TICK_RATE_HZ;
+
+/**
+ * PvE (Practice) placeholder — AUTHORED, and explicitly M6's to replace. M5 owns
+ * no Galacta Bot roster, but `match.ts` still calls the resolver on Practice
+ * rounds; M5 pits the player's lineup against a copy of itself scaled to
+ * `PVE_PLACEHOLDER_STAT_SCALE`, so the bout is deterministic, terminates, and
+ * the player usually wins. Practice rounds are health-neutral in `match.ts`, so
+ * only determinism matters here. M6 deletes this path entirely.
+ */
+export const PVE_PLACEHOLDER_STAT_SCALE = 0.9;
+
+/**
+ * Ultimate archetype catalog — AUTHORED. 39 bespoke ultimates are out of M5
+ * scope (the ledger already marks ult behaviour as authored). Every hero maps
+ * (in `heroes.json`) to one of these six archetypes; the baseline magnitudes
+ * live here. `hitsOfPrimary` multiplies the caster's per-hit damage; `radius` is
+ * in arena units; `durationTicks` gates the timed archetypes;
+ * `healSecondsOfOutput` is multiples of the caster's heal/s applied to every
+ * ally. Per-hero tuning is M11 polish. Falsified by footage pinning a hero's ult
+ * to a materially different shape.
+ */
+export const ULT_ARCHETYPES = {
+  singleTargetBurst: { hitsOfPrimary: 12, radius: 0, durationTicks: 0 },
+  aoeBurst: { hitsOfPrimary: 7, radius: 12, durationTicks: 0 },
+  sustainedBeam: { bonusDamagePct: 120, radius: 0, durationTicks: 5 * TICK_RATE_HZ },
+  teamHealBurst: { healSecondsOfOutput: 6, radius: 0, durationTicks: 0 },
+  shieldDamageReduction: { reductionPct: 40, radius: 0, durationTicks: 6 * TICK_RATE_HZ },
+  selfBuff: { damagePct: 50, attackSpeedPct: 40, durationTicks: 6 * TICK_RATE_HZ },
+} as const;
+
+// ===========================================================================
 // AUTHORED, but stored elsewhere by the ledger's deliberate exception
 // ===========================================================================
 
@@ -372,4 +487,35 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
     'Marker, not a value. strengthen.json ships id/heroId/slot only in M1; names, effect text and keybinds are M10 (wiki + screenshots) and must not be invented.',
   COMBAT_BANDS:
     'AUTHORED. The M1 milestone band table; per-hero picks in heroes.json must land inside it. M11 re-tunes against the M7 win-rate gate.',
+
+  ARENA_CELL_SIZE:
+    'AUTHORED (M5). One 6×4 deploy-grid cell = 6 arena units. Sized with ARENA_TEAM_SEPARATION so range differentiates heroes. Falsified by footage establishing a contradicting arena scale.',
+  ARENA_TEAM_SEPARATION:
+    'AUTHORED (M5). 24 arena units between the two teams\' front rows — a 20–34 sniper reaches the enemy front row at spawn but not its back row (24 + 18 = 42); melee and 16–22 Strategists must close first. Falsified as ARENA_CELL_SIZE.',
+  MOVEMENT_MODEL:
+    'AUTHORED (M5, plan-recommended). Steer straight at the target at moveSpeed × dt, no unit collision (separation nudge is M9). Direction via normalised vector math (sqrt only), never angles.',
+  ULT_ENERGY_PER_DAMAGE_DEALT:
+    'AUTHORED (M5). Fraction of a full ult bar per point of damage dealt, before Charge Acceleration. Tuned for a first ult ~25–40 s into an even fight. Falsified by footage timing casts materially differently.',
+  ULT_ENERGY_PER_DAMAGE_TAKEN:
+    'AUTHORED (M5). As ULT_ENERGY_PER_DAMAGE_DEALT, for damage taken (tanks charge from being hit).',
+  ULT_ENERGY_PER_HEALING_DONE:
+    'AUTHORED (M5). As ULT_ENERGY_PER_DAMAGE_DEALT, for healing done (Strategists charge from healing).',
+  BATTLE_TIE_CAP_TICKS:
+    'AUTHORED (M5). GAME RULE: (battle 40 s + Speed Up 20 s) × 30 Hz = 1800 ticks, after which the battle ends as a tie. Distinct from BATTLE_MAX_TICKS. Falsified by footage of a battle running past 60 s without a tie.',
+  BATTLE_MAX_TICKS:
+    'AUTHORED (M5). BUG GUARD at 2× the tie cap (3600 ticks). The sim throws if reached — a bug report, not a game outcome. Must stay strictly greater than BATTLE_TIE_CAP_TICKS.',
+  SPEED_UP_TRIGGER_TICKS:
+    'AUTHORED (M5). = PHASE_TIMERS_SECONDS.battle (40 s) × 30 Hz = 1200 ticks. At this tick one battle-level flag flips and damage ×2.2 exactly, once. Falsified by footage showing Speed Up before the battle clock expires.',
+  RAMPAGE_DURATION_TICKS:
+    'AUTHORED (M5). Annihilator Fury\'s module text gives the bonus but no duration: 5 s, refreshed on every Final Hit. Falsified by footage timing Rampage.',
+  CRITICAL_COUNTER_NEAR_DEATH_FRACTION:
+    'AUTHORED (M5). "near-death state" is undefined in the Critical Counter text; mirrors Critical Damage Shell\'s 30 % line. Falsified by footage pinning the trigger elsewhere.',
+  VULNERABILITY_MAX_STACKS:
+    'AUTHORED (M5). Vulnerability Mark text gives no stack cap: capped at 5. Falsified by footage showing a different cap.',
+  VULNERABILITY_DURATION_TICKS:
+    'AUTHORED (M5). Vulnerability Mark text gives no decay: the stack set falls off 3 s after the last application. Falsified by footage showing a different decay.',
+  PVE_PLACEHOLDER_STAT_SCALE:
+    'AUTHORED (M5), M6 replaces. match.ts calls the resolver on Practice rounds but M5 has no Galacta Bot roster; the player fights a 0.9×-scaled copy of itself. Practice rounds are health-neutral so only determinism matters.',
+  ULT_ARCHETYPES:
+    'AUTHORED (M5). Baseline magnitudes for the six ult archetypes each hero maps to (heroes.json). Per-hero tuning is M11. Falsified by footage pinning a hero\'s ult to a materially different shape.',
 };

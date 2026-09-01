@@ -52,6 +52,31 @@ export interface HeroCombat {
   readonly moveSpeed: number;
 }
 
+/**
+ * The six authored ultimate archetypes (M5). 39 bespoke ultimates are out of
+ * scope — every hero maps (in `heroes.json`) to one archetype whose baseline
+ * magnitudes live in `authored.ts` → `ULT_ARCHETYPES`. Per-hero flavour and
+ * tuning is M11 polish. See `src/sim/abilities.ts` for the registry.
+ *   singleTargetBurst     — one large hit to the caster's current target
+ *   aoeBurst              — a burst to every enemy within a radius
+ *   sustainedBeam         — a timed self damage-amplifier
+ *   teamHealBurst         — a large instant heal to every ally
+ *   shieldDamageReduction — a timed damage-taken reduction for every ally
+ *   selfBuff             — a timed self damage + attack-speed buff
+ */
+export type UltArchetype =
+  | 'singleTargetBurst'
+  | 'aoeBurst'
+  | 'sustainedBeam'
+  | 'teamHealBurst'
+  | 'shieldDamageReduction'
+  | 'selfBuff';
+
+/** AUTHORED per-hero ultimate mapping. Lives in `heroes.json` by the same ledger exception as `combat`. */
+export interface HeroUlt {
+  readonly archetype: UltArchetype;
+}
+
 export interface Hero {
   /** kebab-case, unique. `id === slugify(name)` — see `validate.ts` → slugify. */
   readonly id: string;
@@ -62,6 +87,8 @@ export interface Hero {
   readonly baseHealth: number;
   readonly targeting: Targeting;
   readonly combat: HeroCombat;
+  /** AUTHORED ultimate archetype mapping (M5). */
+  readonly ult: HeroUlt;
   /** Free-text note where the source carries an oddity (e.g. Hulk's 200/700 split). */
   readonly note?: string;
 }

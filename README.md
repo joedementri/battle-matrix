@@ -16,29 +16,39 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 | `npm run preview` | Serve the production build locally |
 | `npm test` | Run the Vitest suite once |
 | `npm run test:watch` | Run Vitest in watch mode |
-| `npm run test:determinism` | 100× same-seed match replay, hashing every phase boundary |
+| `npm run test:determinism` | Same-seed replay hashing — phase-boundary hashes for a full match, the 100× tick-by-tick combat digest, and the committed golden replays |
 | `npm run lint` | Lint with ESLint |
 
 ## Status
 
-Milestone **M4** — the module system. `src/sim/modules.ts` implements the
-DERIVED shop-rarity-odds formula, the 4-card draw (rarity gated by protocol
-level, no duplicate module in one set, maxed modules excluded from later
-draws), buy/upgrade/sell (XP is granted per star, including upgrades; selling
-refunds `sellValue × stars` and can drop a protocol level), shop lock/refresh,
-and Change Hero → swap-out with Strengthen-Module conversion back to a
-selectable pool. `src/sim/stats.ts` folds a battle-start lineup's owned
-modules and protocol levels into a `ResolvedUnit[]`: health resolves flat
-additive → percentage multiplier → round-start bonus health (never
-multiplied), and damage resolves the ally-module percentage sum, the
-protocol-level bonus, and enemy interference as three separate multiplicative
-factors. The two value-display rules — a shop card always shows the level-1
-value, the info pane shows the cumulative value at the owned level — are
-tested against the exact screenshot strings. Five previously-unpublished shop
-details (protocol/module selection, no-duplicates handling, maxed-module
-exclusion, per-star selling, and LOCK's shop-wide scope) are each pinned as a
-named `src/data/authored.ts` constant. Not yet wired into `match.ts`'s round
-loop — that seam, and the real combat tick sim, land in M5.
+Milestone **M5** — the headless combat simulation core. `src/sim/combat.ts`
+is a fixed **30 Hz integer tick** sim (`effects → target acquisition →
+movement → attacks → abilities/ults → damage & healing → death checks`, units
+in stable id order, no wall clock). `simulateBattle(ctx, opts?)` returns a
+`BattleTrace`; `createCombatResolver()` wraps it in the M2 `CombatResolver`
+contract, so it drops in wherever `match.ts` injects combat — `match.ts`
+itself is unchanged. Targeting follows the canonical
+`nearest` / `lowestMaxHealth` / `highestMaxHealth` priority on **resolved max
+health** (so a target never flips as it is damaged), with a per-unit
+out-of-range re-acquire timer. Ult energy accrues from damage dealt/taken and
+healing done; the **Speed Up Protocol** is a single battle-level flag that
+multiplies damage by exactly 2.2, applied once and never compounded, ending
+the battle as a tie at the cap. A **kill-event stream** (`killer ⟶ weapon ⟶
+victim`) feeds the M9 kill feed, with a damage-source union designed now
+(primary / ability / ultimate / module / drone). `src/sim/effects.ts` and
+`src/sim/abilities.ts` implement the behavioural Rare and Legendary Base
+Modules — Last Stand, Steady Recovery, Critical Damage Shell, Backup Rebirth
+(all three variants), Infinite Drive, the 10 s round-start windows,
+Vulnerability Mark stacking, Life Steal, Annihilator Fury / Rampage, Overflow
+Recharge, Deadly Healing, Double Heal, Critical Counter, and Cumulative Dual
+Enhancement — with a completeness test that every behavioural `effectId` has a
+registered handler and no reachable `TODO`. Per-hero ultimates are a registry
+of six authored **archetypes** (single-target burst, AoE burst, sustained
+beam, team-heal burst, shield / damage-reduction, self-buff); each hero maps
+to one in `heroes.json`, per-hero flavour is M11. Every new authored number
+(arena geometry, ult-energy conversion rates, the tie cap vs. the `maxTicks`
+bug guard, archetype magnitudes) lives in `src/data/authored.ts` with a
+provenance note.
 
 Delivered so far:
 
@@ -58,9 +68,19 @@ Delivered so far:
   protocol XP → level, lock/refresh, Change Hero offers, swap + Strengthen
   conversion) and `src/sim/stats.ts` (module stack → `ResolvedUnit[]`, the
   regression net M11 balances against).
+- **M5** — `src/sim/combat.ts` (the 30 Hz deterministic tick sim + the real
+  `CombatResolver`), `src/sim/effects.ts` (behavioural Base Module hooks +
+  completeness net), and `src/sim/abilities.ts` (the six-archetype ultimate
+  registry). `tests/combat.spec.ts` covers the 100× tick-by-tick hash, the
+  targeting matrix, a hand-computed 1v1 time-to-kill, Speed Up's exact ×2.2
+  non-compounding, multiplicative damage reductions, overflow-healing, and one
+  kill event per KO; `tests/replay.spec.ts` commits five full-match golden
+  outcomes with a documented regeneration path.
 
 `src/sim/` is pure and headless — no DOM, no wall clock, no `Math.random`, no
-`ui/` / `render/` imports — enforced by an ESLint override *and* a grep test.
+transcendental math (`Math.sin` / `cos` / `pow` / `hypot` / `**` — direction is
+normalised vector math, sqrt only), no `ui/` / `render/` imports — enforced by
+an ESLint override *and* a grep test.
 
 See [`PLANS/ultron-battle-matrix-protocol.md`](PLANS/ultron-battle-matrix-protocol.md)
 for the full roadmap.
