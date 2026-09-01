@@ -21,15 +21,24 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 
 ## Status
 
-Milestone **M3** — the economy engine. Token income now moves through the match:
-at every round start (round 1 excepted) each living player is paid base income →
-interest on the balance held *before* that income → a win/loss streak bonus; the
-+2 PvP win bonus is granted at battle resolution, and losing health pays +1 token
-per point actually lost. `previewIncome` returns the `{ base, interest, streak,
-total }` breakdown that is the single source of truth for the HUD's `◇N (+M)`
-preview; `spend` refuses an unaffordable purchase rather than clamping, so tokens
-never go negative. Combat is still the injected M2 stub; the real tick sim lands
-in M5.
+Milestone **M4** — the module system. `src/sim/modules.ts` implements the
+DERIVED shop-rarity-odds formula, the 4-card draw (rarity gated by protocol
+level, no duplicate module in one set, maxed modules excluded from later
+draws), buy/upgrade/sell (XP is granted per star, including upgrades; selling
+refunds `sellValue × stars` and can drop a protocol level), shop lock/refresh,
+and Change Hero → swap-out with Strengthen-Module conversion back to a
+selectable pool. `src/sim/stats.ts` folds a battle-start lineup's owned
+modules and protocol levels into a `ResolvedUnit[]`: health resolves flat
+additive → percentage multiplier → round-start bonus health (never
+multiplied), and damage resolves the ally-module percentage sum, the
+protocol-level bonus, and enemy interference as three separate multiplicative
+factors. The two value-display rules — a shop card always shows the level-1
+value, the info pane shows the cumulative value at the owned level — are
+tested against the exact screenshot strings. Five previously-unpublished shop
+details (protocol/module selection, no-duplicates handling, maxed-module
+exclusion, per-star selling, and LOCK's shop-wide scope) are each pinned as a
+named `src/data/authored.ts` constant. Not yet wired into `match.ts`'s round
+loop — that seam, and the real combat tick sim, land in M5.
 
 Delivered so far:
 
@@ -45,6 +54,10 @@ Delivered so far:
   `previewIncome`, and `spend`, wired into the two seams `match.ts` left. Each
   open economy question (PvE / tie / phantom streak rules, the HP-compensation
   clamp) is pinned by a named `src/data/authored.ts` constant.
+- **M4** — `src/sim/modules.ts` (rarity odds, the 4-card draw, buy/upgrade/sell,
+  protocol XP → level, lock/refresh, Change Hero offers, swap + Strengthen
+  conversion) and `src/sim/stats.ts` (module stack → `ResolvedUnit[]`, the
+  regression net M11 balances against).
 
 `src/sim/` is pure and headless — no DOM, no wall clock, no `Math.random`, no
 `ui/` / `render/` imports — enforced by an ESLint override *and* a grep test.

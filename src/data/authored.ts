@@ -163,6 +163,79 @@ export const PHANTOM_MIRROR_WIN_PAYS: boolean = false;
 export const PHANTOM_MIRROR_TIE_ADVANCES_LOSS_STREAK: boolean = true;
 
 // ===========================================================================
+// AUTHORED — M4 module system: the five details the plan leaves unpublished
+// ===========================================================================
+
+/**
+ * (1) Protocol / module selection inside a rolled rarity — AUTHORED. The wiki's
+ * per-protocol unlock rule reconciles with the DERIVED odds as "roll a rarity
+ * globally, then pick among protocols eligible for it". This pins the pick as
+ * **uniform among eligible protocols, then uniform among that protocol's modules
+ * of that rarity** — no weighting by module count, pool size or how many a
+ * player already owns. Falsified by an observed shop whose per-module frequency
+ * at a fixed protocol-level state is not flat within a (protocol, rarity) cell.
+ */
+export const MODULE_DRAW_PROTOCOL_SELECTION = 'uniformProtocolThenUniformModule' as const;
+
+/**
+ * (2) Duplicates within one 4-card draw — AUTHORED. `true` = the four cards are
+ * distinct module ids (every observed shop screenshot shows four distinct
+ * cards). Enforced by bounded rerolls of the colliding card (rarity held fixed
+ * so the DERIVED odds row is undistorted); the documented deterministic
+ * fallback when a (rarity) space is genuinely too small to fill four — e.g. four
+ * Legendary rolls with a single protocol at L2, whose Legendary pool is 3 — is:
+ * scan that rarity's eligible modules in id order for the first not already in
+ * the set, and only if none exists accept the rolled duplicate. Falsified by an
+ * observed shop showing the same module id on two cards at once.
+ */
+export const MODULE_DRAW_DISTINCT_IN_SET: boolean = true;
+
+/**
+ * (3) Maxed modules in later draws — AUTHORED. `true` = a fully-starred owned
+ * module (a Common at 6, a Rare at 3, a Legendary at 1) is removed from the
+ * draw's candidate pool rather than offered as a dead card the player cannot
+ * act on. Falsified by an observed shop offering a module the player already
+ * owns at max stars.
+ */
+export const MODULE_DRAW_EXCLUDE_MAXED: boolean = true;
+
+/**
+ * (4) Selling a multi-star module — AUTHORED. `true` = both the token refund
+ * (`MODULE_SELL[rarity]`) and the protocol-XP removal (`MODULE_XP[rarity]`)
+ * scale by the number of stars owned, and the module is removed from the
+ * inventory entirely (no "sell one star"). A three-star Rare refunds `9 × 3`
+ * and strips `2 × 3` XP, which can drop a protocol below a threshold and revoke
+ * that tier's bonus. Falsified by footage where selling a starred module refunds
+ * a flat rarity value or only removes one star.
+ */
+export const MODULE_SELL_SCALES_PER_STAR: boolean = true;
+
+/**
+ * (5) `LOCK` semantics — AUTHORED. `LOCK` is a single shop-wide toggle (the
+ * per-card padlock badges in the zoomed screenshot are one set-level lock
+ * rendered on all four cards), and:
+ *   - `clearsAfterCarryover`: a locked set is carried whole into the next
+ *     round's shop and the lock then releases, so the next round can refresh.
+ *   - `refreshRefillsEmptiedSlots`: `REFRESH` redraws the shop back to four
+ *     cards, refilling slots emptied by a purchase this phase.
+ *   - `refreshDisabledWhileLocked`: `REFRESH` greys out while locked, so locked
+ *     cards trivially survive any refresh (there is none to survive).
+ * Falsified by footage where a locked set is not carried over, where the lock
+ * persists a second round, or where refresh works while locked.
+ */
+export const SHOP_LOCK_BEHAVIOUR: {
+  readonly scope: 'set';
+  readonly clearsAfterCarryover: true;
+  readonly refreshRefillsEmptiedSlots: true;
+  readonly refreshDisabledWhileLocked: true;
+} = {
+  scope: 'set',
+  clearsAfterCarryover: true,
+  refreshRefillsEmptiedSlots: true,
+  refreshDisabledWhileLocked: true,
+};
+
+// ===========================================================================
 // AUTHORED, but stored elsewhere by the ledger's deliberate exception
 // ===========================================================================
 
@@ -283,6 +356,16 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
     'AUTHORED. The plan: beating a phantom/mirror "gives you nothing" — no +2, no win-streak increment, no reset of an existing loss streak. Falsified by footage where a phantom/mirror win advances a streak badge or the token counter.',
   PHANTOM_MIRROR_TIE_ADVANCES_LOSS_STREAK:
     'AUTHORED. Resolves a collision between the general tie ruling ("unchanged") and the phantom ruling ("losing or tying … does advance the loss streak") in favour of the more specific phantom wording. Set false to defer to TIE_STREAK_BEHAVIOUR. Falsified by a phantom/mirror tie that leaves a win-streak badge intact.',
+  MODULE_DRAW_PROTOCOL_SELECTION:
+    'AUTHORED. Unpublished detail (1): once a rarity is rolled, pick uniform among eligible protocols, then uniform among that protocol\'s modules of that rarity. Falsified by non-flat per-module draw frequency within a fixed (protocol, rarity) cell.',
+  MODULE_DRAW_DISTINCT_IN_SET:
+    'AUTHORED. Unpublished detail (2): the four shop cards are always distinct module ids (every observed shop screenshot). Enforced by bounded reroll + a documented deterministic scan-then-allow-duplicate fallback. Falsified by an observed shop with a repeated module id.',
+  MODULE_DRAW_EXCLUDE_MAXED:
+    'AUTHORED. Unpublished detail (3): a fully-starred owned module is excluded from later draws rather than offered as a dead card. Falsified by an observed shop offering an already-maxed module.',
+  MODULE_SELL_SCALES_PER_STAR:
+    'AUTHORED. Unpublished detail (4): selling refunds sellValue × starsOwned and removes rarityXp × starsOwned, deleting the module entirely — never a flat refund or a single-star removal. Falsified by footage of a starred sell refunding a flat rarity value.',
+  SHOP_LOCK_BEHAVIOUR:
+    "AUTHORED. Unpublished detail (5): LOCK is one shop-wide toggle (the per-card padlocks are its rendering). A locked set carries into next round's shop and the lock then clears; REFRESH redraws back to four cards, refilling emptied slots; REFRESH is disabled entirely while locked. Falsified by a locked set not carrying over, a lock persisting a second round, or a working refresh while locked.",
   AUTHORED_ELSEWHERE:
     "Pointer, not a value. Per-hero combat stats are AUTHORED but stored in heroes.json → combat by the ledger's deliberate exception; base health there is canonical.",
   STRENGTHEN_JSON_IS_SKELETON:
