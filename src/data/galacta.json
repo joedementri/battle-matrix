@@ -1,0 +1,36 @@
+{
+  "_comment": "M6 AUTHORED — Galacta Bot archetypes and per-Practice-round wave composition. Stored here (not authored.ts) by the ledger's deliberate exception, the same way per-hero combat stats live in heroes.json; the pointer is authored.ts -> AUTHORED_ELSEWHERE.galactaWaves. Per-round stat scaling coefficients are in authored.ts (GALACTA_*_SCALE_PER_ROUND). role is a NOMINAL deploy role used only for formation placement and unique-role counting — Galacta Bots are team-agnostic Units with no protocols and no modules. M11 re-tunes every number here against the win-rate gate; rounds 1 and 6 are meant to be comfortable for a reasonable lineup and rounds 16/21 genuinely threatening.",
+  "archetypes": [
+    {
+      "id": "galacta-swarm",
+      "role": "duelist",
+      "baseHealth": 90,
+      "targeting": "nearest",
+      "ult": { "archetype": "selfBuff" },
+      "combat": { "dps": 38, "attackType": "melee", "attackRange": 5, "attackSpeed": 1.4, "moveSpeed": 4.2 }
+    },
+    {
+      "id": "galacta-brute",
+      "role": "vanguard",
+      "baseHealth": 520,
+      "targeting": "highestMaxHealth",
+      "ult": { "archetype": "shieldDamageReduction" },
+      "combat": { "dps": 52, "attackType": "melee", "attackRange": 6, "attackSpeed": 0.8, "moveSpeed": 2.6 }
+    },
+    {
+      "id": "galacta-caster",
+      "role": "strategist",
+      "baseHealth": 150,
+      "targeting": "lowestMaxHealth",
+      "ult": { "archetype": "teamHealBurst" },
+      "combat": { "dps": 40, "attackType": "ranged", "attackRange": 19, "attackSpeed": 1.0, "moveSpeed": 3.0, "healPerSecond": 35 }
+    }
+  ],
+  "waves": [
+    { "round": 1, "units": { "galacta-swarm": 4, "galacta-brute": 1, "galacta-caster": 1 } },
+    { "round": 6, "units": { "galacta-swarm": 5, "galacta-brute": 2, "galacta-caster": 1 } },
+    { "round": 11, "units": { "galacta-swarm": 6, "galacta-brute": 2, "galacta-caster": 2 } },
+    { "round": 16, "units": { "galacta-swarm": 7, "galacta-brute": 3, "galacta-caster": 2 } },
+    { "round": 21, "units": { "galacta-swarm": 8, "galacta-brute": 4, "galacta-caster": 3 } }
+  ]
+}

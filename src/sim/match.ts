@@ -19,6 +19,7 @@ import {
   LINEUP_SIZE,
   PHASE_COUNT,
   PLAYER_COUNT,
+  PRACTICE_REWARD_COUNTS,
   PRACTICE_ROUNDS,
   STARTING_HEALTH,
   STARTING_TOKENS,
@@ -28,7 +29,9 @@ import {
   HP_LOSS_SURVIVOR_COEFF,
   HP_LOSS_SURVIVOR_RANGE,
   HP_LOSS_TIE_DIVISOR,
+  PVE_LOSS_COSTS_HEALTH,
   ROUND_CAP,
+  STRENGTHEN_REWARD_REQUIRES_WIN,
 } from '../data/authored';
 import heroesJson from '../data/heroes.json';
 import type { Role } from '../data/types';
@@ -36,7 +39,18 @@ import type { Role } from '../data/types';
 import { RngStream } from './rng';
 import type { RngSnapshot, Substream } from './rng';
 import { placeholderDraftLineup } from './botPolicy';
+import { assignDroneColours, planMatchupDrones } from './drone';
+import type { DroneColour } from './drone';
 import { applyBattleResolution, applyRoundStartIncome } from './economy';
+import type { StrengthenInventory } from './modules';
+import {
+  autoFillStrengthenReward,
+  grantStrengthenPicks,
+  openStrengthenReward,
+  pickStrengthenReward,
+  refreshStrengthenReward,
+  strengthenOwnedIds,
+} from './practice';
 import { hashState } from './types';
 import type {
   Action,
@@ -161,6 +175,8 @@ interface WorkPlayer {
   lastRoundResult: BattleResult | 'none';
   streak: number;
   streakKind: StreakKind;
+  droneColour: DroneColour;
+  strengthen: StrengthenInventory;
 }
 
 interface WorkMatchup {
@@ -218,6 +234,13 @@ function cloneState(w: WorkState): MatchState {
       lastRoundResult: p.lastRoundResult,
       streak: p.streak,
       streakKind: p.streakKind,
+      droneColour: p.droneColour,
+      strengthen: {
+        equipped: Object.fromEntries(
+          Object.entries(p.strengthen.equipped).map(([k, v]) => [k, v.slice()]),
+        ),
+        selectable: p.strengthen.selectable.slice(),
+      },
     })),
     matchups: w.matchups.map((m) => ({
       kind: m.kind,
@@ -260,6 +283,9 @@ function initState(seed: number): WorkState {
       lastRoundResult: 'none',
       streak: 0,
       streakKind: 'none',
+      // Overwritten by `assignDroneColours` right after pool assignment.
+      droneColour: 'Default',
+      strengthen: { equipped: {}, selectable: [] },
     });
   }
   return {
@@ -317,15 +343,22 @@ interface PhaseInput {
   readonly confirmed: boolean;
   /** The last `selectLineup` seen this phase (draft only cares). */
   readonly lineup: readonly string[] | null;
+  /** `refreshReward` count seen this phase (only 1 is honoured). Reward phase only. */
+  readonly rewardRefreshes: number;
+  /** `selectReward` module ids seen this phase, in order. Reward phase only. */
+  readonly rewardPicks: readonly string[];
 }
 
 /**
- * Consume actions for the current phase: apply any `selectLineup`, then stop on
- * the first `confirmPhase` (confirmed) or `advanceTimer` (timed out). Running
- * out of actions is an implicit timeout. Unrecognised action types are skipped.
+ * Consume actions for the current phase: apply any `selectLineup`, collect any
+ * `selectReward` / `refreshReward` (the reward phase acts on them), then stop on
+ * the first `confirmPhase` (confirmed) or `advanceTimer` (timed out). Running out
+ * of actions is an implicit timeout. Unrecognised action types are skipped.
  */
 function consumeUntilPhaseEnd(actions: readonly Action[], cur: Cursor): PhaseInput {
   let lineup: readonly string[] | null = null;
+  let rewardRefreshes = 0;
+  const rewardPicks: string[] = [];
   while (cur.i < actions.length) {
     const act = actions[cur.i]!;
     cur.i++;
@@ -333,11 +366,19 @@ function consumeUntilPhaseEnd(actions: readonly Action[], cur: Cursor): PhaseInp
       lineup = act.heroes.slice();
       continue;
     }
-    if (act.type === 'confirmPhase') return { confirmed: true, lineup };
-    if (act.type === 'advanceTimer') return { confirmed: false, lineup };
+    if (act.type === 'refreshReward') {
+      rewardRefreshes++;
+      continue;
+    }
+    if (act.type === 'selectReward') {
+      rewardPicks.push(act.moduleId);
+      continue;
+    }
+    if (act.type === 'confirmPhase') return { confirmed: true, lineup, rewardRefreshes, rewardPicks };
+    if (act.type === 'advanceTimer') return { confirmed: false, lineup, rewardRefreshes, rewardPicks };
     // future action types: skip and keep consuming
   }
-  return { confirmed: false, lineup };
+  return { confirmed: false, lineup, rewardRefreshes, rewardPicks };
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +541,26 @@ function combatContextFor(
     };
   }
 
+  // Drones (M6). Side A is always a living player. `planMatchupDrones` applies
+  // the AUTHORED mirror/phantom calls (mirror gets a policy opponent drone;
+  // phantom and PvE do not). No recorded input in the headless action vocabulary
+  // yet (M9 owns live capture), so every drone runs on the M7-placeholder policy
+  // — the same pattern `botPolicy.ts` uses for both bots and the human draft.
+  const opponentForDrone =
+    m.kind === 'pvp' || m.kind === 'mirror' || m.kind === 'phantom' ? work.players[m.b]! : null;
+  const drones = planMatchupDrones({
+    matchupKind: m.kind,
+    a: { playerId: m.a, colour: a.droneColour, health: a.health },
+    b:
+      opponentForDrone === null
+        ? null
+        : {
+            playerId: m.b,
+            colour: opponentForDrone.droneColour,
+            health: opponentForDrone.health,
+          },
+  });
+
   return {
     round,
     roundType: roundTypeOf(round),
@@ -507,6 +568,7 @@ function combatContextFor(
     sideA,
     sideB,
     rng: rng.stream(`combat:${m.kind}:${m.a}:${m.b}`, round),
+    drones,
   };
 }
 
@@ -592,9 +654,12 @@ function runBattlePhase(
   }
 
   // Health deltas. The DERIVED formula depends only on round + survivors, so
-  // order does not matter. PvE is health-neutral.
+  // order does not matter. A Practice (PvE) round is health-neutral — the plan
+  // says only PvP losses cost health (authored: PVE_LOSS_COSTS_HEALTH = false),
+  // consistent with M3's PvP-only streak decision.
   for (const m of matchups) {
-    if (m.kind === 'pve' || m.resultA === null || m.survivingUnits === null) continue;
+    if (m.resultA === null || m.survivingUnits === null) continue;
+    if (m.kind === 'pve' && !PVE_LOSS_COSTS_HEALTH) continue;
     const survivors = m.survivingUnits;
     if (m.kind === 'pvp') {
       if (m.resultA === 'win') {
@@ -686,6 +751,49 @@ function applyLoss(work: WorkState, id: number, loss: number): void {
 }
 
 // ---------------------------------------------------------------------------
+// Practice reward phase (phase 4) — grant Strengthen Modules (M6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Grant every living player their Practice-round Strengthen picks
+ * (`PRACTICE_REWARD_COUNTS`). Rounds 11/16/21 pay 2 as ONE offer set of three,
+ * select two (`STRENGTHEN_REWARD_MULTI_MODE`). Player 0's `selectReward` /
+ * `refreshReward` actions (collected by `consumeUntilPhaseEnd`) steer their
+ * offers; every other player — and any shortfall for player 0 — is auto-filled
+ * deterministically from the offer set. Granted regardless of the PvE outcome
+ * unless `STRENGTHEN_REWARD_REQUIRES_WIN` is set.
+ */
+function runRewardPhase(
+  work: WorkState,
+  rng: RngStream,
+  round: number,
+  humanRefreshes: number,
+  humanPicks: readonly string[],
+): void {
+  const tier = (PRACTICE_ROUNDS as readonly number[]).indexOf(round);
+  if (tier < 0) return;
+  const needed = PRACTICE_REWARD_COUNTS[tier] ?? 0;
+  if (needed <= 0) return;
+
+  for (const p of work.players) {
+    if (!p.alive) continue;
+    if (STRENGTHEN_REWARD_REQUIRES_WIN && p.lastRoundResult !== 'win') continue;
+
+    const owned = strengthenOwnedIds(p.strengthen);
+    const sub = rng.stream(`reward:${p.id}`, round);
+    let state = openStrengthenReward(round, needed, p.lineup, owned, sub);
+
+    if (p.isHuman) {
+      if (humanRefreshes > 0) state = refreshStrengthenReward(state, p.lineup, owned, sub);
+      for (const id of humanPicks) state = pickStrengthenReward(state, id);
+    }
+    state = autoFillStrengthenReward(state);
+
+    p.strengthen = grantStrengthenPicks(p.strengthen, state.picks);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Boundaries
 // ---------------------------------------------------------------------------
 
@@ -732,6 +840,11 @@ export function runMatch(
 
   // ---- Draft ----
   assignPools(work, rng);
+  // Each player's Ultron Drone colour — one canonical colour each, drawn once per
+  // match from a single named substream (isolated: adding it shifts no other roll).
+  assignDroneColours(rng.stream('drone-colour', 0), PLAYER_COUNT).forEach((colour, i) => {
+    work.players[i]!.droneColour = colour;
+  });
   for (const p of work.players) {
     if (!p.isHuman) {
       setLineup(p, placeholderDraftLineup(p.pool, ROLE_OF, rng.stream(`ai:${p.id}`, 0)), 'auto');
@@ -771,12 +884,15 @@ export function runMatch(
         ? runBattlePhase(work, rng, combat, maxRounds)
         : false;
       // moduleDraw: SEAM (M4 shop) — round-start income applied just above.
-      // selectPosition: SEAM (M6 deploy).
-      // reward: SEAM (M6 — grants PRACTICE_REWARD_COUNTS[...] Strengthen picks).
+      // selectPosition: SEAM (M8 deploy).
 
       const input = consumeUntilPhaseEnd(actions, cursor);
       work.humanConfirmedPhase = input.confirmed;
       work.actionCursor = cursor.i;
+
+      if (work.phaseKind === 'reward') {
+        runRewardPhase(work, rng, round, input.rewardRefreshes, input.rewardPicks);
+      }
 
       pushBoundary(boundaries, work, rng, round, phase, work.phaseKind);
 

@@ -322,16 +322,6 @@ export const VULNERABILITY_MAX_STACKS = 5;
 export const VULNERABILITY_DURATION_TICKS = 3 * TICK_RATE_HZ;
 
 /**
- * PvE (Practice) placeholder — AUTHORED, and explicitly M6's to replace. M5 owns
- * no Galacta Bot roster, but `match.ts` still calls the resolver on Practice
- * rounds; M5 pits the player's lineup against a copy of itself scaled to
- * `PVE_PLACEHOLDER_STAT_SCALE`, so the bout is deterministic, terminates, and
- * the player usually wins. Practice rounds are health-neutral in `match.ts`, so
- * only determinism matters here. M6 deletes this path entirely.
- */
-export const PVE_PLACEHOLDER_STAT_SCALE = 0.9;
-
-/**
  * Ultimate archetype catalog — AUTHORED. 39 bespoke ultimates are out of M5
  * scope (the ledger already marks ult behaviour as authored). Every hero maps
  * (in `heroes.json`) to one of these six archetypes; the baseline magnitudes
@@ -351,6 +341,142 @@ export const ULT_ARCHETYPES = {
 } as const;
 
 // ===========================================================================
+// AUTHORED — M6 Ultron Drone + Practice Protocol
+// ===========================================================================
+
+/**
+ * Unpublished rule (1) — does a PvE (Practice) loss cost health? AUTHORED: NO.
+ * The plan states only *PvP* losses cost health; a Practice loss is health-
+ * neutral, which also keeps it consistent with M3's PvP-only streak decision
+ * (`PVE_TOUCHES_STREAK = false`). Falsified by a scoreboard where a player's
+ * health drops across a Practice round with no PvP round between observations.
+ */
+export const PVE_LOSS_COSTS_HEALTH: boolean = false;
+
+/**
+ * Unpublished rule (2) — is the Strengthen Module reward conditional on winning
+ * the Practice round? AUTHORED: NO — granted regardless of outcome. It is a
+ * Practice round and the plan states the payout unconditionally (1 on rounds
+ * 1 & 6, 2 on 11/16/21). Falsified by footage where a Practice loss yields no
+ * Strengthen pick.
+ */
+export const STRENGTHEN_REWARD_REQUIRES_WIN: boolean = false;
+
+/**
+ * Unpublished rule (3) — how do rounds 11/16/21 pay 2 Strengthen Modules?
+ * AUTHORED: `'singleOfferSetSelectN'` — ONE offer set of three, select two.
+ * This matches the in-game string `Select N Strengthen Modules` and the single
+ * `REFRESH 1/1` (one shared refresh, not one per draw). `'sequentialDraws'`
+ * would run two independent 3-card draws with two refreshes. Falsified by
+ * footage of two sequential Strengthen reward draws on rounds 11/16/21.
+ */
+export const STRENGTHEN_REWARD_MULTI_MODE: 'singleOfferSetSelectN' | 'sequentialDraws' =
+  'singleOfferSetSelectN';
+
+/**
+ * Reward-offer shrinking-pool fallback — AUTHORED. Each hero has exactly 2
+ * Strengthen Modules, so a 6-hero lineup caps at 12 candidates; accumulation
+ * plus hero swaps can drop the eligible set below the 3-card offer size.
+ * `'offerFewer'` shows `min(3, eligible)` cards rather than widening off-lineup
+ * (which would break "always for heroes in the current lineup") or throwing.
+ * `'widenToReserve'` would top up from Reserve heroes' modules. Falsified by
+ * footage of a Strengthen offer card for a hero not in the current lineup.
+ */
+export const STRENGTHEN_OFFER_SHRINK_FALLBACK: 'offerFewer' | 'widenToReserve' = 'offerFewer';
+
+/**
+ * Mirror-matchup opponent drone — AUTHORED. A `mirror` bout is the odd-one-out
+ * fighting a *copy of a living opponent's* lineup in real time, so it plausibly
+ * brings a policy-driven drone for that mirrored opponent. `true`. Falsified by
+ * footage of a mirror matchup with no opponent drone.
+ */
+export const MIRROR_MATCHUP_HAS_OPPONENT_DRONE: boolean = true;
+
+/**
+ * Phantom-matchup opponent drone — AUTHORED. A `phantom` is an *eliminated*
+ * player's frozen lineup, and the plan says "beating one gives you nothing", so
+ * it fields no drone. `false`. Falsified by footage of a phantom matchup that
+ * shows an opponent drone.
+ */
+export const PHANTOM_MATCHUP_HAS_OPPONENT_DRONE: boolean = false;
+
+/**
+ * Ultron Drone free-flight speed, arena units/second — AUTHORED. Heroes move
+ * 3.0–4.4; the drone flies well above the fight and can "cross the whole arena"
+ * (clamped to the M5 arena bounds), so it is faster. 12 crosses the 60-deep
+ * arena in ~5 s. Falsified by footage timing drone travel.
+ */
+export const DRONE_MOVE_SPEED = 12;
+
+/**
+ * Recorded-input movement quantization divisor — AUTHORED. M9's live-capture
+ * layer must PRODUCE the drone input stream; a raw mouse-derived float would
+ * desync a replay across JS engines. Movement is stored as a fixed-point
+ * normalized vector: integer components in [−DRONE_MOVE_QUANT, DRONE_MOVE_QUANT],
+ * divided by this at read time. 1000 gives 0.001 resolution — far below any
+ * cross-engine float drift. Not falsifiable by footage (an engine-fidelity
+ * choice); changing it changes recorded-replay hashes.
+ */
+export const DRONE_MOVE_QUANT = 1000;
+
+/**
+ * Encephalo-Ray beam damage/second — AUTHORED, and deliberately tiny. Its budget
+ * is an *assertion*, not this number: `tests/drone.spec.ts` measures the beam's
+ * whole-battle damage held the entire fight and proves it is <0.1 % of a
+ * Duelist's total in the same battle — it must never be a win condition. 0.02
+ * dps ≈ 1 point of damage over a full-length battle. Falsified by footage where
+ * the beam does meaningful damage.
+ */
+export const ENCEPHALO_RAY_DPS = 0.02;
+
+/**
+ * `LSHIFT` One-Time Damage magnitude, flat, per living enemy unit — AUTHORED.
+ * Fires at most once per Battle Phase. 120 finishes a near-dead Duelist and
+ * dents a tank without wiping a healthy line — a finisher, not a win button.
+ * M11 tunes against the win-rate gate. Falsified by footage pinning it to a
+ * different value or a percentage.
+ */
+export const DRONE_ONE_TIME_DAMAGE = 120;
+
+/**
+ * `E` One-Time Healing magnitude, flat, per living allied unit — AUTHORED.
+ * Symmetric with `DRONE_ONE_TIME_DAMAGE`. Fires at most once per Battle Phase.
+ * Falsified as `DRONE_ONE_TIME_DAMAGE`.
+ */
+export const DRONE_ONE_TIME_HEALING = 120;
+
+/**
+ * Placeholder drone policy — the "low HP" fraction — AUTHORED, from the plan's
+ * M7 rule ("below 40 % HP"). M7 replaces the whole placeholder policy.
+ */
+export const DRONE_POLICY_LOW_HP_FRACTION = 0.4;
+
+/**
+ * Placeholder drone policy — fire One-Time Damage when at least this many enemy
+ * units are below `DRONE_POLICY_LOW_HP_FRACTION` — AUTHORED, from the plan's M7
+ * rule ("≥ 3 enemies"). M7 replaces the placeholder.
+ */
+export const DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD = 3;
+
+/**
+ * Placeholder drone policy — fire One-Time Healing when at least this many
+ * allied units are below `DRONE_POLICY_LOW_HP_FRACTION` — AUTHORED, from the
+ * plan's M7 rule ("≥ 2 allies"). M7 replaces the placeholder.
+ */
+export const DRONE_POLICY_HEAL_ALLY_THRESHOLD = 2;
+
+/**
+ * Galacta Bot per-round stat scaling — AUTHORED. Every bot's health and dps in
+ * `galactaWave(round)` is multiplied by `1 + SCALE_PER_ROUND × (round − 1)`, so
+ * the wave grows with the round number on top of its larger composition. At
+ * round 1 the multiplier is 1.0 (tier-0 wave, comfortable); at round 21 health
+ * ×2.2 and dps ×2.0 across 15 units (genuinely threatening). M11 re-tunes.
+ * Falsified by footage establishing a different Practice-round difficulty curve.
+ */
+export const GALACTA_HEALTH_SCALE_PER_ROUND = 0.06;
+export const GALACTA_DPS_SCALE_PER_ROUND = 0.05;
+
+// ===========================================================================
 // AUTHORED, but stored elsewhere by the ledger's deliberate exception
 // ===========================================================================
 
@@ -362,6 +488,7 @@ export const ULT_ARCHETYPES = {
  */
 export const AUTHORED_ELSEWHERE = {
   perHeroCombatStats: 'heroes.json → combat',
+  galactaWaves: 'galacta.json',
 } as const;
 
 /**
@@ -482,7 +609,7 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   SHOP_LOCK_BEHAVIOUR:
     "AUTHORED. Unpublished detail (5): LOCK is one shop-wide toggle (the per-card padlocks are its rendering). A locked set carries into next round's shop and the lock then clears; REFRESH redraws back to four cards, refilling emptied slots; REFRESH is disabled entirely while locked. Falsified by a locked set not carrying over, a lock persisting a second round, or a working refresh while locked.",
   AUTHORED_ELSEWHERE:
-    "Pointer, not a value. Per-hero combat stats are AUTHORED but stored in heroes.json → combat by the ledger's deliberate exception; base health there is canonical.",
+    "Pointer, not a value. Per-hero combat stats are AUTHORED but stored in heroes.json → combat by the ledger's deliberate exception (base health there is canonical); Galacta Bot archetypes + wave composition are AUTHORED (M6) in galacta.json by the same exception.",
   STRENGTHEN_JSON_IS_SKELETON:
     'Marker, not a value. strengthen.json ships id/heroId/slot only in M1; names, effect text and keybinds are M10 (wiki + screenshots) and must not be invented.',
   COMBAT_BANDS:
@@ -514,8 +641,39 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
     'AUTHORED (M5). Vulnerability Mark text gives no stack cap: capped at 5. Falsified by footage showing a different cap.',
   VULNERABILITY_DURATION_TICKS:
     'AUTHORED (M5). Vulnerability Mark text gives no decay: the stack set falls off 3 s after the last application. Falsified by footage showing a different decay.',
-  PVE_PLACEHOLDER_STAT_SCALE:
-    'AUTHORED (M5), M6 replaces. match.ts calls the resolver on Practice rounds but M5 has no Galacta Bot roster; the player fights a 0.9×-scaled copy of itself. Practice rounds are health-neutral so only determinism matters.',
   ULT_ARCHETYPES:
     'AUTHORED (M5). Baseline magnitudes for the six ult archetypes each hero maps to (heroes.json). Per-hero tuning is M11. Falsified by footage pinning a hero\'s ult to a materially different shape.',
+
+  PVE_LOSS_COSTS_HEALTH:
+    "AUTHORED (M6). Unpublished rule (1): a Practice (PvE) loss is health-neutral — the plan says only PvP losses cost health, and this matches M3's PvP-only streak call. Falsified by a scoreboard where health drops across a Practice round.",
+  STRENGTHEN_REWARD_REQUIRES_WIN:
+    'AUTHORED (M6). Unpublished rule (2): the Strengthen Module reward is granted regardless of the Practice-round outcome — it is a Practice round and the plan states the payout unconditionally. Falsified by footage where a Practice loss yields no Strengthen pick.',
+  STRENGTHEN_REWARD_MULTI_MODE:
+    "AUTHORED (M6). Unpublished rule (3): rounds 11/16/21 pay 2 as ONE offer set of three, select two ('singleOfferSetSelectN') — matches the string 'Select N Strengthen Modules' and the single 'REFRESH 1/1'. 'sequentialDraws' = two independent draws. Falsified by footage of two sequential Strengthen reward draws.",
+  STRENGTHEN_OFFER_SHRINK_FALLBACK:
+    "AUTHORED (M6). Each hero has exactly 2 Strengthen Modules → a lineup caps at 12 candidates, shrunk by accumulation + hero swaps. 'offerFewer' shows min(3, eligible) rather than widening off-lineup or throwing. Falsified by a Strengthen offer card for a hero not in the current lineup.",
+  MIRROR_MATCHUP_HAS_OPPONENT_DRONE:
+    'AUTHORED (M6). A mirror bout fights a copy of a living opponent\'s lineup in real time, so it brings a policy-driven drone for that opponent. Falsified by footage of a mirror matchup with no opponent drone.',
+  PHANTOM_MATCHUP_HAS_OPPONENT_DRONE:
+    'AUTHORED (M6). A phantom is an eliminated player\'s frozen lineup and "beating one gives you nothing", so it fields no drone. Falsified by footage of a phantom matchup showing an opponent drone.',
+  DRONE_MOVE_SPEED:
+    'AUTHORED (M6). Drone free-flight speed in arena units/s — faster than heroes (3.0–4.4) since it flies over the fight and may cross the whole arena. Falsified by footage timing drone travel.',
+  DRONE_MOVE_QUANT:
+    'AUTHORED (M6). Fixed-point divisor for recorded drone movement vectors (integer components in ±this, ÷ at read time). An engine-fidelity choice so replays reproduce across machines; not falsifiable by footage.',
+  ENCEPHALO_RAY_DPS:
+    "AUTHORED (M6), deliberately tiny. The real budget is an ASSERTION: drone.spec.ts measures the beam held the whole battle and proves it is <0.1 % of a Duelist's total — never a win condition. Falsified by footage where the beam does meaningful damage.",
+  DRONE_ONE_TIME_DAMAGE:
+    'AUTHORED (M6). LSHIFT One-Time Damage, flat, per living enemy unit; fires at most once per Battle Phase. A finisher, not a win button. M11 tunes. Falsified by footage pinning it to a different value or a percentage.',
+  DRONE_ONE_TIME_HEALING:
+    'AUTHORED (M6). E One-Time Healing, flat, per living allied unit; symmetric with DRONE_ONE_TIME_DAMAGE. Falsified as DRONE_ONE_TIME_DAMAGE.',
+  DRONE_POLICY_LOW_HP_FRACTION:
+    'AUTHORED (M6), from the plan\'s M7 drone rule ("below 40 % HP"). Used only by the placeholder drone policy, which M7 replaces.',
+  DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD:
+    'AUTHORED (M6), from the plan\'s M7 drone rule ("≥ 3 enemies below 40 %"). Placeholder-policy only; M7 replaces it.',
+  DRONE_POLICY_HEAL_ALLY_THRESHOLD:
+    'AUTHORED (M6), from the plan\'s M7 drone rule ("≥ 2 allies below 40 %"). Placeholder-policy only; M7 replaces it.',
+  GALACTA_HEALTH_SCALE_PER_ROUND:
+    'AUTHORED (M6). Galacta Bot health multiplier = 1 + this × (round − 1), on top of the larger per-tier composition. Round 1 = ×1.0 (comfortable), round 21 = ×2.2 (threatening). M11 re-tunes. Falsified by a different Practice difficulty curve.',
+  GALACTA_DPS_SCALE_PER_ROUND:
+    'AUTHORED (M6). As GALACTA_HEALTH_SCALE_PER_ROUND, for Galacta Bot dps (and heal/s). Round 21 = ×2.0.',
 };

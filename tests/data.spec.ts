@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import heroesJson from '../src/data/heroes.json';
 import modulesJson from '../src/data/modules.json';
 import strengthenJson from '../src/data/strengthen.json';
+import galactaJson from '../src/data/galacta.json';
 import * as C from '../src/data/constants';
 import * as A from '../src/data/authored';
 import * as S from '../src/data/strings';
 import { validate } from '../src/data/validate';
-import type { BaseModule, Hero, StrengthenModuleSkeleton } from '../src/data/types';
+import type { BaseModule, GalactaData, Hero, StrengthenModuleSkeleton } from '../src/data/types';
 
 /*
  * Encodes every M1 assertion. Reference facts (the baseHealth table, role counts,
@@ -365,6 +366,62 @@ describe('strengthen.json (M1 skeleton)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Galacta Bots (M6)
+// ---------------------------------------------------------------------------
+
+describe('galacta.json (M6 Galacta Bot data)', () => {
+  const galacta = galactaJson as unknown as GalactaData;
+  const TARGETINGS = ['nearest', 'lowestMaxHealth', 'highestMaxHealth'];
+  const ULT_ARCHETYPES = [
+    'singleTargetBurst',
+    'aoeBurst',
+    'sustainedBeam',
+    'teamHealBurst',
+    'shieldDamageReduction',
+    'selfBuff',
+  ];
+  const ATTACK_TYPES = ['melee', 'ranged', 'sniper'];
+
+  it('has archetypes with unique kebab ids, positive combat stats and valid enums', () => {
+    expect(galacta.archetypes.length).toBeGreaterThanOrEqual(1);
+    expect(new Set(galacta.archetypes.map((a) => a.id)).size).toBe(galacta.archetypes.length);
+    for (const a of galacta.archetypes) {
+      expect(a.id, `${a.id} kebab`).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      expect(['vanguard', 'duelist', 'strategist']).toContain(a.role);
+      expect(TARGETINGS).toContain(a.targeting);
+      expect(ULT_ARCHETYPES).toContain(a.ult.archetype);
+      expect(a.baseHealth).toBeGreaterThan(0);
+      expect(a.combat.dps).toBeGreaterThan(0);
+      expect(a.combat.attackSpeed).toBeGreaterThan(0);
+      expect(a.combat.attackRange).toBeGreaterThan(0);
+      expect(a.combat.moveSpeed).toBeGreaterThan(0);
+      expect(ATTACK_TYPES).toContain(a.combat.attackType);
+    }
+  });
+
+  it('waves cover exactly the Practice rounds and never shrink round-to-round', () => {
+    expect(galacta.waves.map((w) => w.round).slice().sort((x, y) => x - y)).toEqual([
+      ...C.PRACTICE_ROUNDS,
+    ]);
+    const ids = new Set(galacta.archetypes.map((a) => a.id));
+    let prev = 0;
+    for (const round of C.PRACTICE_ROUNDS) {
+      const w = galacta.waves.find((x) => x.round === round)!;
+      let total = 0;
+      for (const [k, n] of Object.entries(w.units)) {
+        expect(ids.has(k), `round ${round} archetype ${k}`).toBe(true);
+        expect(Number.isInteger(n) && n >= 1, `round ${round} ${k} count`).toBe(true);
+        total += n;
+      }
+      expect(total).toBeGreaterThanOrEqual(1);
+      expect(total).toBeLessThanOrEqual(24); // the 6×4 deploy grid
+      expect(total, `round ${round} not smaller than the previous wave`).toBeGreaterThanOrEqual(prev);
+      prev = total;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Constants — canonical
 // ---------------------------------------------------------------------------
 
@@ -529,6 +586,8 @@ describe('strings.ts (verbatim)', () => {
     expect(S.XP_LEGEND).toBe('★ = XP+1 · ★ = XP+2 · ★ = XP+4');
     expect(S.OWNED_MODULES).toBe('Owned Modules:');
     expect(S.REFRESH_1_1).toBe('REFRESH 1/1');
+    expect(S.ARENA_MAP_NAME).toBe('Age of Ultron: Digital Duel Grounds');
+    expect(S.ARENA_MAP_NAME).toBe(C.ARENA_MAP); // strings.ts is the verbatim source; constants mirrors it
     expect([S.COL_RANK, S.COL_PLAYER_NAME, S.COL_DEPLOY, S.COL_INITIATE_PROTOCOL]).toEqual([
       'Rank',
       'Player Name',

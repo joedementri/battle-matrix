@@ -13,6 +13,8 @@
 
 import type { RngSnapshot, Substream } from './rng';
 import { hash128Hex } from './rng';
+import type { DroneColour, DroneSpec } from './drone';
+import type { StrengthenInventory } from './modules';
 
 // ---------------------------------------------------------------------------
 // Enumerations
@@ -71,14 +73,32 @@ export interface AdvanceTimerAction {
   readonly type: 'advanceTimer';
 }
 
+/** Reward phase (phase 4): pick a Strengthen Module from the current offer set. */
+export interface SelectRewardAction {
+  readonly type: 'selectReward';
+  /** A Strengthen Module id currently on offer (e.g. `"loki-s1"`). */
+  readonly moduleId: string;
+}
+
+/** Reward phase (phase 4): spend the one free `REFRESH 1/1`. A second is ignored. */
+export interface RefreshRewardAction {
+  readonly type: 'refreshReward';
+}
+
 /**
- * The M2 action vocabulary. Later milestones extend this union in place — the
+ * The action vocabulary. Later milestones extend this union in place — the
  * machine already skips any action it does not recognise for the current phase,
  * so adding members is non-breaking:
- *   M4: buyModule / sellModule / refreshShop / lockShop / changeHero / swapHero
- *   M6: deployUnit / fireDroneAbility / selectReward
+ *   M4 (deferred): buyModule / sellModule / refreshShop / lockShop / changeHero / swapHero
+ *   M6: selectReward / refreshReward (the Practice reward phase)
+ *   M9: driveDrone (per-tick live capture — recorded input for the sim's drone seam)
  */
-export type Action = SelectLineupAction | ConfirmPhaseAction | AdvanceTimerAction;
+export type Action =
+  | SelectLineupAction
+  | ConfirmPhaseAction
+  | AdvanceTimerAction
+  | SelectRewardAction
+  | RefreshRewardAction;
 
 // ---------------------------------------------------------------------------
 // Injected combat — M2 ships a stub; M5 swaps in the real resolver, untouched
@@ -111,6 +131,12 @@ export interface CombatContext {
    * as needed — substream isolation keeps neighbouring matchups unaffected.
    */
   readonly rng: Substream;
+  /**
+   * The Ultron Drones over this battle (M6). `match.ts` builds this per matchup
+   * via `planMatchupDrones`; the M5 direct-test path omits it. `SimulateOptions.drones`
+   * overrides it when both are present.
+   */
+  readonly drones?: readonly DroneSpec[];
 }
 
 export interface CombatOutcome {
@@ -192,6 +218,20 @@ export interface PlayerState {
    */
   readonly streak: number;
   readonly streakKind: StreakKind;
+
+  /**
+   * This player's Ultron Drone colour — one of the canonical six, drawn once per
+   * match from the `drone-colour` substream. State only; rendering is M9.
+   */
+  readonly droneColour: DroneColour;
+
+  /**
+   * Strengthen Modules held (M6). `equipped` maps a lineup hero id to the
+   * Strengthen ids on it; `selectable` holds ids returned to the pool by a hero
+   * swap (M4's conversion path). The left-rail count is `equipped-total + selectable`.
+   * In a headless `runMatch` (no swap actions wired) `selectable` stays empty.
+   */
+  readonly strengthen: StrengthenInventory;
 }
 
 export interface Matchup {

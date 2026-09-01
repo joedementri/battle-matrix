@@ -197,6 +197,7 @@ exports[`strings.ts (verbatim) > every string in strings.ts is locked (edit = lo
   },
   "statics": {
     "ACTIVE_HEROES": "ACTIVE HEROES",
+    "ARENA_MAP_NAME": "Age of Ultron: Digital Duel Grounds",
     "ASSEMBLE_YOUR_TEAM": "Assemble Your Team",
     "BATTLE_PROTOCOL": "BATTLE PROTOCOL",
     "BTN_CANCEL": "CANCEL",

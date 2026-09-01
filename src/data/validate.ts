@@ -14,6 +14,7 @@
 import heroesJson from './heroes.json';
 import modulesJson from './modules.json';
 import strengthenJson from './strengthen.json';
+import galactaJson from './galacta.json';
 
 import * as C from './constants';
 import {
@@ -28,7 +29,9 @@ import {
   ROUND_CAP,
 } from './authored';
 import type {
+  AttackType,
   BaseModule,
+  GalactaData,
   Hero,
   ModuleScope,
   ModuleStat,
@@ -47,6 +50,7 @@ import type {
 const heroes = heroesJson as unknown as readonly Hero[];
 const modules = modulesJson as unknown as readonly BaseModule[];
 const strengthen = strengthenJson as unknown as readonly StrengthenModuleSkeleton[];
+const galacta = galactaJson as unknown as GalactaData;
 
 // ---------------------------------------------------------------------------
 // Deterministic id rule
@@ -130,6 +134,7 @@ const ULT_ARCHETYPES: readonly UltArchetype[] = [
   'selfBuff',
 ];
 const ROLES: readonly Role[] = ['vanguard', 'duelist', 'strategist'];
+const ATTACK_TYPES: readonly AttackType[] = ['melee', 'ranged', 'sniper'];
 const PROTOCOLS: readonly Protocol[] = ['fortress', 'onslaught', 'reboot', 'equilibrium'];
 const RARITIES: readonly Rarity[] = ['common', 'rare', 'legendary'];
 const SCOPES: readonly ModuleScope[] = ['flat', 'perRoleUnit', 'perUniqueRole'];
@@ -181,6 +186,7 @@ export function validate(): Problem[] {
   validateHeroes(add);
   validateModules(add);
   validateStrengthen(add);
+  validateGalacta(add);
   validateConstants(add);
   validateAuthored(add);
 
@@ -424,6 +430,65 @@ function validateStrengthen(add: Add): void {
     if (!eq(slots, [1, 2])) {
       add('strengthen/two-per-hero', `${id} must be referenced by exactly two rows (slots 1 & 2), got ${JSON.stringify(slots)}`);
     }
+  }
+}
+
+function validateGalacta(add: Add): void {
+  if (!Array.isArray(galacta.archetypes) || galacta.archetypes.length < 1) {
+    add('galacta/archetypes', 'galacta.json needs at least one archetype');
+    return;
+  }
+
+  const ids = new Set<string>();
+  for (const a of galacta.archetypes) {
+    if (ids.has(a.id)) add('galacta/id-unique', `duplicate Galacta archetype id: ${a.id}`);
+    ids.add(a.id);
+    if (!KEBAB.test(a.id)) add('galacta/id-kebab', `Galacta archetype id is not kebab-case: ${a.id}`);
+    if (!ROLES.includes(a.role)) add('galacta/role', `${a.id}: bad role "${a.role}"`);
+    if (!TARGETINGS.includes(a.targeting)) add('galacta/targeting', `${a.id}: bad targeting "${a.targeting}"`);
+    if (a.ult === undefined || !ULT_ARCHETYPES.includes(a.ult.archetype)) {
+      add('galacta/ult', `${a.id}: ult.archetype must be one of ${ULT_ARCHETYPES.join(' / ')}`);
+    }
+    if (!(a.baseHealth > 0)) add('galacta/health', `${a.id}: baseHealth must be > 0, got ${a.baseHealth}`);
+
+    const c = a.combat;
+    if (!(c.dps > 0)) add('galacta/dps', `${a.id}: dps must be > 0, got ${c.dps}`);
+    if (!(c.attackSpeed > 0)) add('galacta/attack-speed', `${a.id}: attackSpeed must be > 0, got ${c.attackSpeed}`);
+    if (!(c.attackRange > 0)) add('galacta/range', `${a.id}: attackRange must be > 0, got ${c.attackRange}`);
+    if (!(c.moveSpeed > 0)) add('galacta/move', `${a.id}: moveSpeed must be > 0, got ${c.moveSpeed}`);
+    if (!ATTACK_TYPES.includes(c.attackType)) add('galacta/attack-type', `${a.id}: bad attackType "${c.attackType}"`);
+    if (c.healPerSecond !== undefined && !(c.healPerSecond > 0)) {
+      add('galacta/heal', `${a.id}: healPerSecond must be > 0 when present, got ${c.healPerSecond}`);
+    }
+  }
+
+  const waveRounds = galacta.waves.map((w) => w.round).slice().sort((x, y) => x - y);
+  if (!eq(waveRounds, [...C.PRACTICE_ROUNDS])) {
+    add(
+      'galacta/wave-rounds',
+      `waves must cover exactly the Practice rounds ${JSON.stringify([...C.PRACTICE_ROUNDS])}, got ${JSON.stringify(waveRounds)}`,
+    );
+  }
+
+  let prevTotal = 0;
+  for (const round of C.PRACTICE_ROUNDS as readonly number[]) {
+    const w = galacta.waves.find((x) => x.round === round);
+    if (w === undefined) continue;
+    let total = 0;
+    for (const [k, n] of Object.entries(w.units)) {
+      if (!ids.has(k)) add('galacta/wave-archetype', `round ${round}: unknown archetype "${k}"`);
+      if (!Number.isInteger(n) || n < 1) {
+        add('galacta/wave-count', `round ${round}: ${k} count ${n} must be a positive integer`);
+      }
+      total += n;
+    }
+    if (total < 1 || total > 24) {
+      add('galacta/wave-size', `round ${round}: ${total} units, must be 1..24 (the 6×4 grid)`);
+    }
+    if (total < prevTotal) {
+      add('galacta/wave-monotone', `round ${round}: wave (${total}) is smaller than the previous wave (${prevTotal})`);
+    }
+    prevTotal = total;
   }
 }
 

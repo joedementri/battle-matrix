@@ -43,31 +43,35 @@ function replay(seed: number): ReplayOutcome {
   };
 }
 
-// ---- COMMITTED (regenerated 2026-09-01 — M5 initial commit) ------------------
+// ---- COMMITTED (regenerated 2026-09-01 — M6: Galacta Bots + Ultron Drones -----
+//      wired into the resolver. Real Galacta waves replace the M5 PvE self-mirror
+//      placeholder; every battle now hosts N policy-driven drones whose two
+//      one-time abilities swing PvP outcomes. Deliberate regeneration per the M6
+//      plan's Integration note — no determinism test was weakened. -------------
 const COMMITTED: readonly ReplayOutcome[] = [
   {
     seed: 11,
     winnerId: 5,
-    finalRound: 25,
-    placements: [4, 2, 3, 6, 5, 1],
-    boundaryCount: 81,
-    finalStateHash: '32e988f51ee6c65a4c61dbaa262096b9',
+    finalRound: 30,
+    placements: [3, 2, 4, 5, 6, 1],
+    boundaryCount: 96,
+    finalStateHash: 'f3e24a916f25edbdcd1fdf9a9ec3063f',
   },
   {
     seed: 2024,
     winnerId: 2,
-    finalRound: 27,
-    placements: [3, 5, 1, 6, 2, 4],
-    boundaryCount: 87,
-    finalStateHash: '91f2b58c1da6a4105d5b711278821d83',
+    finalRound: 26,
+    placements: [3, 4, 1, 6, 2, 5],
+    boundaryCount: 84,
+    finalStateHash: '7027687527a7b3fdaee35376d6ed1448',
   },
   {
     seed: 424242,
-    winnerId: 3,
-    finalRound: 34,
-    placements: [3, 5, 6, 1, 2, 4],
-    boundaryCount: 108,
-    finalStateHash: '2bf279e4ff567c0e5f885b6b358af553',
+    winnerId: 0,
+    finalRound: 29,
+    placements: [1, 5, 6, 4, 3, 2],
+    boundaryCount: 93,
+    finalStateHash: 'a588309edd11c4e931d6187ee31650e5',
   },
   {
     seed: 918273,
@@ -75,15 +79,15 @@ const COMMITTED: readonly ReplayOutcome[] = [
     finalRound: 34,
     placements: [1, 3, 5, 2, 4, 6],
     boundaryCount: 108,
-    finalStateHash: '5bb932cc667aed21db899db18b2b6fbf',
+    finalStateHash: 'fa451af2100dd0f7808a4a3d2b62900d',
   },
   {
     seed: 12648430,
-    winnerId: 3,
-    finalRound: 28,
-    placements: [4, 5, 2, 1, 3, 6],
-    boundaryCount: 90,
-    finalStateHash: 'e8f557c418b8e39f9000d0ed60fbca5d',
+    winnerId: 4,
+    finalRound: 29,
+    placements: [2, 5, 4, 3, 1, 6],
+    boundaryCount: 93,
+    finalStateHash: '45af21400b52741901852ccf51f003d6',
   },
 ];
 // ---- /COMMITTED --------------------------------------------------------------

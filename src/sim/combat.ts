@@ -41,7 +41,11 @@ import {
   ARENA_TEAM_SEPARATION,
   BATTLE_MAX_TICKS,
   BATTLE_TIE_CAP_TICKS,
-  PVE_PLACEHOLDER_STAT_SCALE,
+  DRONE_MOVE_SPEED,
+  DRONE_ONE_TIME_DAMAGE,
+  DRONE_ONE_TIME_HEALING,
+  DRONE_POLICY_LOW_HP_FRACTION,
+  ENCEPHALO_RAY_DPS,
   RAMPAGE_DURATION_TICKS,
   SPEED_UP_TRIGGER_TICKS,
   ULT_ENERGY_PER_DAMAGE_DEALT,
@@ -52,6 +56,14 @@ import heroesJson from '../data/heroes.json';
 import type { Role, Targeting, UltArchetype } from '../data/types';
 
 import { castUlt } from './abilities';
+import {
+  beamHeldAt,
+  decodeDroneMove,
+} from './drone';
+import type { DroneColour, DroneSpec } from './drone';
+import { placeholderDronePolicy } from './dronePolicy';
+import type { DroneCommand } from './dronePolicy';
+import { galactaWave, resolvedFromGalacta } from './galacta';
 import {
   applyVulnStack,
   backupRebirthFraction,
@@ -86,6 +98,18 @@ const GRID_COLS = BOARD.cols;
 const GRID_ROWS = BOARD.rows;
 /** 6-column deploy grid, centre-out fill order (nearest the centre line first). */
 const CENTRE_OUT_COLS: readonly number[] = [2, 3, 1, 4, 0, 5];
+
+/**
+ * The arena box the M6 Ultron Drone is clamped to — the exact footprint the
+ * formation uses: `GRID_COLS` cells wide, side A's back row at `minY`, side B's
+ * back row at `maxY`. "May cross the whole arena" = anywhere in this box.
+ */
+export const ARENA_BOUNDS = {
+  minX: -(GRID_COLS * ARENA_CELL_SIZE) / 2,
+  maxX: (GRID_COLS * ARENA_CELL_SIZE) / 2,
+  minY: -((GRID_ROWS - 1) * ARENA_CELL_SIZE),
+  maxY: ARENA_TEAM_SEPARATION + (GRID_ROWS - 1) * ARENA_CELL_SIZE,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Public event / trace shapes (the kill feed contract for M9)
@@ -131,6 +155,8 @@ export interface UnitSnapshot {
   readonly id: number;
   readonly side: 0 | 1;
   readonly heroId: string;
+  /** True for a Galacta Bot — M9 draws it as a monster, not a hero token. */
+  readonly isGalactaBot: boolean;
   readonly alive: boolean;
   readonly health: number;
   readonly overhealth: number;
@@ -140,10 +166,26 @@ export interface UnitSnapshot {
   readonly y: number;
 }
 
+/** End-of-battle snapshot of one Ultron Drone (for M9's HUD and for tests). */
+export interface DroneSnapshot {
+  readonly side: 0 | 1;
+  readonly playerId: number;
+  readonly colour: DroneColour;
+  /** = the owning player's 50-based health, unchanged for the whole battle. */
+  readonly health: number;
+  readonly x: number;
+  readonly y: number;
+  /** `LSHIFT` spent this Battle Phase (greys out in the HUD; resets next round). */
+  readonly oneTimeDamageUsed: boolean;
+  /** `E` spent this Battle Phase. */
+  readonly oneTimeHealUsed: boolean;
+}
+
 /**
- * M6 seam: a deterministic external-actor input stream (the Ultron Drone).
- * `simulateBattle` applies matching events at each tick's damage & healing
- * phase; combat NEVER reaches for input itself.
+ * M5 seam: a deterministic raw external-actor input stream. Kept for direct
+ * tests; the M6 `drones` option (a full N-drone model with recorded / policy
+ * input) is the real path. `simulateBattle` applies matching events at each
+ * tick's damage & healing phase; combat NEVER reaches for input itself.
  */
 export interface ExternalActorEvent {
   readonly tick: number;
@@ -163,6 +205,7 @@ export interface BattleTrace {
   readonly revives: readonly ReviveEvent[];
   readonly speedUpStartedAtTick: number | null;
   readonly finalUnits: readonly UnitSnapshot[];
+  readonly finalDrones: readonly DroneSnapshot[];
   /** Non-null only when `opts.trace` was set. */
   readonly damageLog: readonly DamageLogEntry[] | null;
 }
@@ -177,6 +220,12 @@ export interface SimulateOptions {
   readonly sideAModules?: SideModules;
   readonly sideBModules?: SideModules;
   readonly externalActors?: readonly ExternalActorEvent[];
+  /**
+   * The Ultron Drones in this battle (M6). N drones, each with a `side` and an
+   * input source that is either a recorded quantized stream or the placeholder
+   * policy. Overrides `ctx.drones` when set; the resolver path uses `ctx.drones`.
+   */
+  readonly drones?: readonly DroneSpec[];
   /** Test/debug seam: reposition units after formation, before tick 1. Unused by `createCombatResolver`. */
   readonly place?: (units: BattleUnit[]) => void;
   /**
@@ -199,14 +248,17 @@ export interface BattleUnit {
   readonly side: 0 | 1;
   /** Lineup index 0..5. */
   readonly slot: number;
+  /** Hero id, or — for a Galacta Bot — its archetype id (e.g. `galacta-swarm`). */
   readonly heroId: string;
+  /** True for a Galacta Bot: a team-agnostic PvE `Unit` (no protocols, no modules). */
+  readonly isGalactaBot: boolean;
   readonly role: Role;
   readonly targeting: Targeting;
   readonly resolved: ResolvedUnit;
   readonly ultArchetype: UltArchetype;
-  /** `resolved.dps / resolved.attackSpeed`, with any placeholder stat scale baked in. */
+  /** `resolved.dps / resolved.attackSpeed`. */
   readonly perHitBase: number;
-  /** `resolved.healPerSecond`, stat-scale baked in (0 for non-Strategists). */
+  /** `resolved.healPerSecond` (0 for units that do not sustain-heal). */
   readonly perHealBase: number;
 
   x: number;
@@ -250,11 +302,31 @@ export interface BattleUnit {
   vulnTicks: number;
 }
 
+/**
+ * A live Ultron Drone inside a battle. NOT a `BattleUnit` and never in
+ * `field.units`, so nothing can target or damage it. `health` is a frozen copy
+ * of the owning player's 50-based health and never changes here.
+ */
+export interface DroneRuntime {
+  readonly side: 0 | 1;
+  readonly playerId: number;
+  readonly colour: DroneColour;
+  readonly health: number;
+  readonly input: DroneSpec['input'];
+  x: number;
+  y: number;
+  oneTimeDamageUsed: boolean;
+  oneTimeHealUsed: boolean;
+  beamHeldThisTick: boolean;
+}
+
 export interface BattleField {
   tick: number;
   speedUpActive: boolean;
   speedUpStartedAtTick: number | null;
   readonly units: BattleUnit[];
+  /** The Ultron Drones over this battle (0..N). Not units — cannot be targeted or hurt. */
+  readonly drones: DroneRuntime[];
   /** Unique role count (1..3) of each side's battle-start lineup — for Equilibrium behavioural scaling. */
   readonly sideUniqueRoles: readonly [number, number];
   readonly rng: Substream;
@@ -516,21 +588,22 @@ function makeUnit(
   heroId: string,
   meta: HeroMeta,
   resolved: ResolvedUnit,
-  statScale: number,
+  isGalactaBot: boolean,
 ): BattleUnit {
-  const maxHealth = resolved.maxHealth * statScale;
-  const startBonus = resolved.bonusHealth * statScale;
+  const maxHealth = resolved.maxHealth;
+  const startBonus = resolved.bonusHealth;
   return {
     id,
     side,
     slot,
     heroId,
+    isGalactaBot,
     role: meta.role,
     targeting: meta.targeting,
     resolved,
     ultArchetype: meta.ultArchetype,
-    perHitBase: (resolved.dps / resolved.attackSpeed) * statScale,
-    perHealBase: resolved.healPerSecond * statScale,
+    perHitBase: resolved.dps / resolved.attackSpeed,
+    perHealBase: resolved.healPerSecond,
     x: 0,
     y: 0,
     health: maxHealth,
@@ -564,33 +637,59 @@ function makeUnit(
   };
 }
 
+function buildDroneRuntimes(specs: readonly DroneSpec[]): DroneRuntime[] {
+  return specs.map((s) => ({
+    side: s.side,
+    playerId: s.playerId,
+    colour: s.colour,
+    health: s.health,
+    input: s.input,
+    x: 0,
+    y: s.side === 0 ? ARENA_BOUNDS.minY : ARENA_BOUNDS.maxY,
+    oneTimeDamageUsed: false,
+    oneTimeHealUsed: false,
+    beamHeldThisTick: false,
+  }));
+}
+
 function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
   const lineupA = ctx.sideA.lineup;
-  let lineupB = ctx.sideB.lineup;
-  let scaleB = 1;
-  if (ctx.sideB.isGalactaBots) {
-    // M5 has no Galacta Bot roster (M6 owns that). Practice rounds are
-    // health-neutral in match.ts, so a deterministic scaled self-mirror is a
-    // faithful-enough placeholder — see authored.ts -> PVE_PLACEHOLDER_STAT_SCALE.
-    lineupB = lineupA;
-    scaleB = PVE_PLACEHOLDER_STAT_SCALE;
-  }
-  if (lineupA.length === 0 || lineupB.length === 0) {
-    throw new RangeError('combat: both sides need at least one hero');
-  }
+  const isPve = ctx.sideB.isGalactaBots;
+  const lineupB = ctx.sideB.lineup;
+
+  if (lineupA.length === 0) throw new RangeError('combat: side A needs at least one hero');
+  if (!isPve && lineupB.length === 0) throw new RangeError('combat: side B needs at least one hero');
 
   const modA = opts.sideAModules ?? emptySide();
-  const modB = opts.sideBModules ?? emptySide();
-  const resolvedA = resolveUnits(lineupA, modA, lineupB, modB);
-  const resolvedB = resolveUnits(lineupB, modB, lineupA, modA);
-
   const units: BattleUnit[] = [];
-  lineupA.forEach((heroId, slot) => {
-    units.push(makeUnit(units.length, 0, slot, heroId, heroMeta(heroId), resolvedA[slot]!, 1));
-  });
-  lineupB.forEach((heroId, slot) => {
-    units.push(makeUnit(units.length, 1, slot, heroId, heroMeta(heroId), resolvedB[slot]!, scaleB));
-  });
+
+  if (isPve) {
+    // Galacta Bots (M6): team-agnostic Units built straight from the wave spec.
+    const resolvedA = resolveUnits(lineupA, modA, [], emptySide());
+    lineupA.forEach((heroId, slot) => {
+      units.push(makeUnit(units.length, 0, slot, heroId, heroMeta(heroId), resolvedA[slot]!, false));
+    });
+    const wave = galactaWave(ctx.round);
+    if (wave.length === 0) throw new RangeError(`combat: galactaWave(${ctx.round}) produced no units`);
+    wave.forEach((spec, slot) => {
+      const meta: HeroMeta = {
+        role: spec.role,
+        targeting: spec.targeting,
+        ultArchetype: spec.ultArchetype,
+      };
+      units.push(makeUnit(units.length, 1, slot, spec.kind, meta, resolvedFromGalacta(spec), true));
+    });
+  } else {
+    const modB = opts.sideBModules ?? emptySide();
+    const resolvedA = resolveUnits(lineupA, modA, lineupB, modB);
+    const resolvedB = resolveUnits(lineupB, modB, lineupA, modA);
+    lineupA.forEach((heroId, slot) => {
+      units.push(makeUnit(units.length, 0, slot, heroId, heroMeta(heroId), resolvedA[slot]!, false));
+    });
+    lineupB.forEach((heroId, slot) => {
+      units.push(makeUnit(units.length, 1, slot, heroId, heroMeta(heroId), resolvedB[slot]!, false));
+    });
+  }
 
   assignFormation(units);
   if (opts.place !== undefined) opts.place(units);
@@ -600,6 +699,7 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
     speedUpActive: false,
     speedUpStartedAtTick: null,
     units,
+    drones: buildDroneRuntimes(opts.drones ?? ctx.drones ?? []),
     sideUniqueRoles: [
       uniqueRoleCount(units.filter((u) => u.side === 0)),
       uniqueRoleCount(units.filter((u) => u.side === 1)),
@@ -776,6 +876,104 @@ function applyExternalActors(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Ultron Drones (M6) — input enters the sim here, never generated by combat
+// ---------------------------------------------------------------------------
+
+function clampRange(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+/** Nearest living enemy unit id to a point, id-tiebroken. -1 if none. */
+function nearestEnemyUnitToPoint(field: BattleField, side: 0 | 1, x: number, y: number): number {
+  let bestId = -1;
+  let bestDistSq = 0;
+  for (const u of field.units) {
+    if (!u.alive || u.side === side) continue;
+    const dx = u.x - x;
+    const dy = u.y - y;
+    const distSq = dx * dx + dy * dy;
+    if (bestId === -1 || distSq < bestDistSq || (distSq === bestDistSq && u.id < bestId)) {
+      bestId = u.id;
+      bestDistSq = distSq;
+    }
+  }
+  return bestId;
+}
+
+/** Living units on `side` whose regular health is below `frac` of max. */
+function countUnitsBelowFraction(field: BattleField, side: 0 | 1, frac: number): number {
+  let n = 0;
+  for (const u of field.units) {
+    if (u.alive && u.side === side && u.health < frac * u.maxHealth) n++;
+  }
+  return n;
+}
+
+/** One tick of control for a drone: recorded stream if present, else the M7-placeholder policy. */
+function droneCommand(field: BattleField, d: DroneRuntime, tick: number): DroneCommand {
+  if (d.input !== null) {
+    return {
+      move: decodeDroneMove(d.input, tick),
+      beam: beamHeldAt(d.input, tick),
+      pressOneTimeDamage: d.input.oneTimeDamageTick === tick,
+      pressOneTimeHeal: d.input.oneTimeHealTick === tick,
+    };
+  }
+  const enemySide: 0 | 1 = d.side === 0 ? 1 : 0;
+  return placeholderDronePolicy({
+    enemiesBelowLowHp: countUnitsBelowFraction(field, enemySide, DRONE_POLICY_LOW_HP_FRACTION),
+    alliesBelowLowHp: countUnitsBelowFraction(field, d.side, DRONE_POLICY_LOW_HP_FRACTION),
+    oneTimeDamageUsed: d.oneTimeDamageUsed,
+    oneTimeHealUsed: d.oneTimeHealUsed,
+  });
+}
+
+/**
+ * Move each drone, hold/release the Encephalo-Ray, and fire the two one-time
+ * abilities — queueing every effect into the same batch the units use. Drones
+ * are never in `field.units`, so this is the ONLY place they act. Kill events
+ * from a drone carry `killerUnitId = -1` (the existing `-1` source path).
+ */
+function tickDrones(field: BattleField, tick: number): void {
+  if (field.drones.length === 0) return;
+  for (const d of field.drones) {
+    const cmd = droneCommand(field, d, tick);
+
+    if (cmd.move !== null) {
+      d.x = clampRange(
+        d.x + cmd.move.x * DRONE_MOVE_SPEED * TICK_DT_SECONDS,
+        ARENA_BOUNDS.minX,
+        ARENA_BOUNDS.maxX,
+      );
+      d.y = clampRange(
+        d.y + cmd.move.y * DRONE_MOVE_SPEED * TICK_DT_SECONDS,
+        ARENA_BOUNDS.minY,
+        ARENA_BOUNDS.maxY,
+      );
+    }
+
+    d.beamHeldThisTick = cmd.beam;
+    if (cmd.beam) {
+      const tgt = nearestEnemyUnitToPoint(field, d.side, d.x, d.y);
+      if (tgt >= 0) field.queue.damage(-1, tgt, ENCEPHALO_RAY_DPS * TICK_DT_SECONDS, 'drone');
+    }
+
+    if (cmd.pressOneTimeDamage && !d.oneTimeDamageUsed) {
+      d.oneTimeDamageUsed = true;
+      for (const u of field.units) {
+        if (u.alive && u.side !== d.side) field.queue.damage(-1, u.id, DRONE_ONE_TIME_DAMAGE, 'drone');
+      }
+    }
+    if (cmd.pressOneTimeHeal && !d.oneTimeHealUsed) {
+      d.oneTimeHealUsed = true;
+      for (const u of field.units) {
+        if (u.alive && u.side === d.side) field.queue.heal(-1, u.id, DRONE_ONE_TIME_HEALING);
+      }
+    }
+  }
+}
+
 function dealHealthLoss(u: BattleUnit, amount: number): void {
   if (amount <= 0) return;
   let remaining = amount;
@@ -809,8 +1007,11 @@ function applyOneDamage(
     if (field.tick <= INITIAL_WINDOW_TICKS) amt *= 1 + src.resolved.roundStartDamagePct / 100;
   }
 
-  // Battle-level Speed Up — a flag, applied ONCE, never re-applied per tick.
-  if (field.speedUpActive) amt *= SPEED_UP_DAMAGE_MULTIPLIER;
+  // Battle-level Speed Up — "+120% damage to all HEROES", a flag applied ONCE,
+  // never re-applied per tick. The Ultron Drone is not a hero, so its
+  // Encephalo-Ray / one-time abilities are exempt (keeps the beam-budget
+  // assertion clean regardless of when the drone fires).
+  if (field.speedUpActive && source !== 'drone') amt *= SPEED_UP_DAMAGE_MULTIPLIER;
 
   // Target-side amplifier: Vulnerability Mark stacks.
   if (tgt.vulnStacks > 0) amt *= 1 + (tgt.vulnStacks * tgt.vulnPerStackPct) / 100;
@@ -978,6 +1179,19 @@ function foldTickIntoHash(field: BattleField): void {
     );
     h.mix(u.vulnStacks * 64 + u.criticalDamageShellTicks);
   }
+  // Drone state — so the digest tracks drone INPUT (movement, beam, one-time
+  // presses). Same-seed + same input stream ⇒ identical digest, and any change
+  // to the input changes it.
+  for (const d of field.drones) {
+    h.mix(d.side + 1);
+    h.mix(Math.round(d.x * 1000) | 0);
+    h.mix(Math.round(d.y * 1000) | 0);
+    h.mix(
+      (d.oneTimeDamageUsed ? 1 : 0) +
+        (d.oneTimeHealUsed ? 2 : 0) +
+        (d.beamHeldThisTick ? 4 : 0),
+    );
+  }
 }
 
 function runTick(field: BattleField, opts: RunOpts): void {
@@ -997,6 +1211,7 @@ function runTick(field: BattleField, opts: RunOpts): void {
     doSustainedHeal(field, u);
   }
   for (const u of field.units) if (u.alive) maybeCastUlt(field, u);
+  tickDrones(field, t);
   applyExternalActors(field, opts.externalActors, t);
   applyQueuedEvents(field);
   deathChecks(field);
@@ -1068,6 +1283,7 @@ export function simulateBattle(ctx: CombatContext, opts: SimulateOptions = {}): 
           id: u.id,
           side: u.side,
           heroId: u.heroId,
+          isGalactaBot: u.isGalactaBot,
           alive: u.alive,
           health: u.health,
           overhealth: u.overhealth,
@@ -1075,6 +1291,16 @@ export function simulateBattle(ctx: CombatContext, opts: SimulateOptions = {}): 
           ultCasts: u.ultCasts,
           x: u.x,
           y: u.y,
+        })),
+        finalDrones: field.drones.map((d) => ({
+          side: d.side,
+          playerId: d.playerId,
+          colour: d.colour,
+          health: d.health,
+          x: d.x,
+          y: d.y,
+          oneTimeDamageUsed: d.oneTimeDamageUsed,
+          oneTimeHealUsed: d.oneTimeHealUsed,
         })),
         damageLog: field.damageLog,
       };

@@ -207,6 +207,40 @@ export interface StrengthenModuleSkeleton {
 }
 
 // ---------------------------------------------------------------------------
+// Galacta Bots — M6 (the Practice Protocol PvE opponent)
+// ---------------------------------------------------------------------------
+
+/**
+ * One Galacta Bot archetype. AUTHORED (M6), stored in `galacta.json` by the same
+ * ledger exception as hero `combat` stats — see `authored.ts` →
+ * `AUTHORED_ELSEWHERE.galactaWaves`. Galacta Bots are team-agnostic `Unit`s in
+ * the sim: no protocols, no modules. `role` is a NOMINAL deploy role used only
+ * for formation placement and unique-role counting.
+ */
+export interface GalactaArchetype {
+  /** kebab-case, unique, e.g. "galacta-swarm" — also the M9 monster-art key. */
+  readonly id: string;
+  readonly role: Role;
+  readonly baseHealth: number;
+  readonly targeting: Targeting;
+  readonly ult: HeroUlt;
+  readonly combat: HeroCombat;
+}
+
+/** How many of each archetype a Practice round fields, before per-round scaling. */
+export interface GalactaWaveSpec {
+  /** The Practice round this composition is the base for (1 / 6 / 11 / 16 / 21). */
+  readonly round: number;
+  /** archetype id → count (positive integer). */
+  readonly units: Readonly<Record<string, number>>;
+}
+
+export interface GalactaData {
+  readonly archetypes: readonly GalactaArchetype[];
+  readonly waves: readonly GalactaWaveSpec[];
+}
+
+// ---------------------------------------------------------------------------
 // validate.ts
 // ---------------------------------------------------------------------------
 

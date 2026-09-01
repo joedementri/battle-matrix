@@ -182,3 +182,13 @@ export const HINT_B_MODULES = 'B MODULES';
 export const HINT_EXIT_EDITING = 'EXIT EDITING';
 export const HINT_LALT_CURSOR_MODE = 'LALT CURSOR MODE';
 export const HINT_ENTER_CHAT = 'ENTER CHAT';
+
+// ---------------------------------------------------------------------------
+// Battle / arena
+// ---------------------------------------------------------------------------
+
+/**
+ * The map the battle (and the Ultron Drone) plays over. Also mirrored in
+ * `constants.ts` as `ARENA_MAP`; `data.spec.ts` asserts the two stay in sync.
+ */
+export const ARENA_MAP_NAME = 'Age of Ultron: Digital Duel Grounds';
