@@ -26,6 +26,7 @@ import {
   CHANGE_HERO_OFFERS,
   COMMON_MODULE_BUY,
   LEGENDARY_UNLOCK_LEVEL,
+  LOOTING_LEVIATHAN_RARITY_TABLE,
   MODULE_SELL,
   MODULE_XP,
   PROTOCOL_XP_THRESHOLDS,
@@ -181,6 +182,59 @@ export function protocolsEligibleFor(rarity: Rarity, levels: ProtocolLevels): Pr
   if (rarity === 'common') return [...PROTOCOLS];
   const minLevel = rarity === 'rare' ? RARE_UNLOCK_LEVEL : LEGENDARY_UNLOCK_LEVEL;
   return PROTOCOLS.filter((p) => levels[p] >= minLevel);
+}
+
+// ---------------------------------------------------------------------------
+// Jeff the Land Shark — *Looting Leviathan* (M10)
+//
+// This Strengthen Module grants Base Modules on its OWN rarity table, keyed by
+// how many enemies Jeff's ult devoured, and BYPASSES the derived shop-odds
+// formula entirely. It never calls `rarityOdds()` and never touches a shop
+// draw — its own path, its own (caller-supplied) substream. The table is
+// plan-supplied (`LOOTING_LEVIATHAN_RARITY_TABLE`) and used exactly as written.
+// ---------------------------------------------------------------------------
+
+/** Clamp a devour count to the table's `{4, 5, 6}` tiers (6 = "6 or more"). */
+function lootingLeviathanTier(devoured: number): 4 | 5 | 6 {
+  if (devoured <= 4) return 4;
+  if (devoured === 5) return 5;
+  return 6;
+}
+
+/** The `common / rare / legendary` percentages for a devour count. Does NOT touch `rarityOdds`. */
+export function lootingLeviathanRarityOdds(devoured: number): RarityOdds {
+  return LOOTING_LEVIATHAN_RARITY_TABLE[lootingLeviathanTier(devoured)];
+}
+
+/**
+ * Roll one Base Module rarity off the Looting Leviathan table. `rng` MUST be a
+ * dedicated substream (`stream('looting-leviathan', …)`) so this consumer cannot
+ * shift the shop's or any AI's rolls.
+ */
+export function rollLootingLeviathanRarity(devoured: number, rng: Substream): Rarity {
+  const o = lootingLeviathanRarityOdds(devoured);
+  return rng.weighted([
+    { value: 'common' as const, weight: o.common },
+    { value: 'rare' as const, weight: o.rare },
+    { value: 'legendary' as const, weight: o.legendary },
+  ]);
+}
+
+/**
+ * Grant `devoured - 2` Base Modules (one per enemy past the 3-enemy floor),
+ * each rolled off the Looting Leviathan table and then drawn uniformly from the
+ * pool of that rarity across all protocols (Looting Leviathan is not
+ * protocol-gated). Returns module ids. `[]` for `devoured < 3`.
+ */
+export function grantLootingLeviathanModules(devoured: number, rng: Substream): string[] {
+  if (devoured < 3) return [];
+  const out: string[] = [];
+  for (let i = 0; i < devoured - 2; i++) {
+    const rarity = rollLootingLeviathanRarity(devoured, rng);
+    const pool = MODULES.filter((m) => m.rarity === rarity);
+    if (pool.length > 0) out.push(rng.pick(pool).id);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -43,38 +43,38 @@ function replay(seed: number): ReplayOutcome {
   };
 }
 
-// ---- COMMITTED (regenerated 2026-09-02 — M7: AI opponents) ------------------
-//      M7 wires the module economy + a 6×4 board-deployment model into the
-//      match loop and replaces the placeholder bot / drone policies with the
-//      five real archetypes and the shared drone policy. These `runMatch(seed,
-//      [], resolver)` replays give the human seat NO actions, so it now sits
-//      passive (no purchases, engine formation) while all five bots draft,
-//      spend, deploy and fly a tracking drone — the human loses in every seed
-//      here, which is the point of the change, not a regression. Matches also
-//      end a few rounds sooner: bots with modules kill faster.
+// ---- COMMITTED (regenerated 2026-09-02 — M10: Strengthen Modules) -----------
+//      M10 gives all 76 sourced Strengthen Modules a real combat implementation
+//      (passive stat folds + `onUlt` self-buff windows) and threads each
+//      player's equipped Strengthen loadout into the resolver. Every player
+//      picks up Strengthen Modules from the Practice-round rewards, so from
+//      round 2 on both sides of every PvP battle now carry live Strengthen
+//      effects — outcomes, placements and state hashes move accordingly, and
+//      a few matches end a round or two sooner (buffed lineups kill faster).
+//      This is the intended consequence of wiring M10, not a regression.
 //
-//      Verified in two steps before this table was blessed: (1) the state-shape
-//      + shop-open change alone left every seed's winner / round / placements /
-//      boundary count identical to M6 (only `finalStateHash` moved, from the new
-//      PlayerState fields); (2) the archetypes actually playing produced the
-//      values below. No determinism guarantee was weakened —
-//      `tests/determinism.spec.ts` is untouched and green.
+//      No determinism guarantee was weakened: `tests/determinism.spec.ts`
+//      (stub resolver, self-referential) and `combat.spec.ts` / `match.spec.ts`
+//      (compute their own ref in-run) are untouched and green. A battle with no
+//      Strengthen modules keeps its pre-M10 digest byte-for-byte (the new
+//      `strenUltTicks` hash fold only contributes while an `onUlt` window is
+//      live). Regenerated via `REGEN_REPLAYS=1` and re-run twice for stability.
 const COMMITTED: readonly ReplayOutcome[] = [
   {
     seed: 11,
     winnerId: 1,
     finalRound: 24,
-    placements: [6, 1, 3, 5, 4, 2],
+    placements: [6, 1, 2, 4, 5, 3],
     boundaryCount: 78,
-    finalStateHash: '06cbb81b66b5f399d66fc8e42fdc16a2',
+    finalStateHash: 'e1e013e259ca66150d3ea5d6d0ba4439',
   },
   {
     seed: 2024,
-    winnerId: 1,
-    finalRound: 28,
-    placements: [5, 1, 3, 6, 4, 2],
-    boundaryCount: 90,
-    finalStateHash: 'e08b859142dee2f1e72519bb95e5318c',
+    winnerId: 2,
+    finalRound: 26,
+    placements: [6, 2, 1, 5, 3, 4],
+    boundaryCount: 84,
+    finalStateHash: '0101e8dfb338488f80bcb17f281fa89e',
   },
   {
     seed: 424242,
@@ -82,23 +82,23 @@ const COMMITTED: readonly ReplayOutcome[] = [
     finalRound: 29,
     placements: [6, 2, 1, 4, 5, 3],
     boundaryCount: 93,
-    finalStateHash: '477a76e9c496ff9471e9d0f52c184cb7',
+    finalStateHash: 'a9cb6f3e4b29c9cd913a11148f9e7fc9',
   },
   {
     seed: 918273,
-    winnerId: 1,
-    finalRound: 27,
-    placements: [6, 1, 5, 2, 3, 4],
-    boundaryCount: 87,
-    finalStateHash: '42a0634361d36ceb9675e0f7e5d374e6',
+    winnerId: 3,
+    finalRound: 28,
+    placements: [6, 2, 3, 1, 4, 5],
+    boundaryCount: 90,
+    finalStateHash: '0232814b17996457379d40d4ea597eb9',
   },
   {
     seed: 12648430,
     winnerId: 1,
-    finalRound: 26,
-    placements: [6, 1, 3, 4, 5, 2],
-    boundaryCount: 84,
-    finalStateHash: 'b0693dc7f2fa475014eb80525d65782f',
+    finalRound: 25,
+    placements: [6, 1, 3, 5, 4, 2],
+    boundaryCount: 81,
+    finalStateHash: 'a740dbf2df23a8d5c54348ad26217e00',
   },
 ];
 // ---- /COMMITTED --------------------------------------------------------------

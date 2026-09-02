@@ -3,32 +3,32 @@
     "id": "captain-america-s1",
     "heroId": "captain-america",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Lawbreaker of Physics",
+    "effect": "Sentinel Strike's throwable shield gains deflection and can release the next Sentinel Strike without requiring the shield to return.",
     "keybind": ""
   },
   {
     "id": "captain-america-s2",
     "heroId": "captain-america",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Captain Shield Throw",
+    "effect": "Increase Sentinel Strike attack frequency by 80 percent, and transform it into a fully throwable shield ability.",
     "keybind": ""
   },
   {
     "id": "doctor-strange-s1",
     "heroId": "doctor-strange",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Mercy of Denak",
+    "effect": "Increase Daggers of Denak fire rate and magazine capacity by 80 percent, and fire two additional projectiles.",
     "keybind": ""
   },
   {
     "id": "doctor-strange-s2",
     "heroId": "doctor-strange",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Turbulent Maelstrom of Madness",
+    "effect": "Reduce Maelstrom of Madness cooldown by six seconds; each use adds damage instances to subsequent Maelstroms.",
     "keybind": ""
   },
   {
@@ -51,576 +51,576 @@
     "id": "groot-s1",
     "heroId": "groot",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Great Ironwood Wall",
+    "effect": "Reduce Ironwood Wall cooldown by 10 seconds and passive trigger interval by 0.5 seconds; Increase Ironwood Wall Health by 400 and max count by one.",
     "keybind": ""
   },
   {
     "id": "groot-s2",
     "heroId": "groot",
     "slot": 2,
-    "name": "",
-    "effect": "",
-    "keybind": ""
+    "name": "Ghost Thornlash Wall",
+    "effect": "Reduce Thornlash Wall cooldown by 4s and passive trigger interval by 0.2s; Increase Thornlash Wall max count by 1.",
+    "keybind": "LSHIFT"
   },
   {
     "id": "hulk-s1",
     "heroId": "hulk",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Gamma Shield Bomb",
+    "effect": "Each Indestructible Guard shield triggers an area explosion upon ending.",
     "keybind": ""
   },
   {
     "id": "hulk-s2",
     "heroId": "hulk",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Gamma Shield Generator",
+    "effect": "Accelerate Indestructible Guard casting speed, and refresh Indestructible Guard cooldown after dealing 200 damage.",
     "keybind": ""
   },
   {
     "id": "magneto-s1",
     "heroId": "magneto",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Wrath of Magneto",
+    "effect": "Increase the Ultimate Ability's maximum duration by two seconds and Damage absorption limit by 800.",
     "keybind": ""
   },
   {
     "id": "magneto-s2",
     "heroId": "magneto",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Meteor Gravitation",
+    "effect": "Before the meteor lands and explodes, pull nearby enemies to the center.",
     "keybind": ""
   },
   {
     "id": "peni-parker-s1",
     "heroId": "peni-parker",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Field of Spider-Nests",
+    "effect": "Reduce Bionic Spider-Nest cooldown by 12 seconds, increase max nest limit by three, and boost Spider-Drones production speed by 100 percent.",
     "keybind": ""
   },
   {
     "id": "peni-parker-s2",
     "heroId": "peni-parker",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Web Hunting",
+    "effect": "Enemies within the webs for two seconds will be ensnared.",
     "keybind": ""
   },
   {
     "id": "the-thing-s1",
     "heroId": "the-thing",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Yancy Street Rampage",
+    "effect": "Increase Yancy Street Charge maximum duration by five seconds, and stun targets for one second upon collision.",
     "keybind": ""
   },
   {
     "id": "the-thing-s2",
     "heroId": "the-thing",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Invincible Haymaker",
+    "effect": "Stone Haymaker has a 50 percent chance to trigger a Super Punch, knocking enemies back. If pushed to the edge of the map, it deals additional damage.",
     "keybind": ""
   },
   {
     "id": "thor-s1",
     "heroId": "thor",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Odin's Blessing",
+    "effect": "Increase Ultimate Ability range by three meters and reduce the interval of aerial damage over time by 0.3 seconds.",
     "keybind": ""
   },
   {
     "id": "thor-s2",
     "heroId": "thor",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Enjoy the Thunder",
+    "effect": "During Awakening Ruse, increase firing speed by 80 percent, and grant lightning arc waves Pierce.",
     "keybind": ""
   },
   {
     "id": "venom-s1",
     "heroId": "venom",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Guaranteed Survival",
+    "effect": "Reduce Symbiotic Resilience cooldown by seven seconds, increase the extra health coefficient by 0.3, and restore 30 percent of lost health upon activation.",
     "keybind": ""
   },
   {
     "id": "venom-s2",
     "heroId": "venom",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "King in Black",
+    "effect": "Devour permanently grants 10 percent of damage dealt as maximum health, up to 1,200, and enlarges the character.",
     "keybind": ""
   },
   {
     "id": "black-panther-s1",
     "heroId": "black-panther",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Endless Rend",
+    "effect": "Increase Sprint Rend base damage by 40, and each Sprint Rend hit reduces the remaining cooldown of Spear Toss and Spinning Kick by three seconds.",
     "keybind": ""
   },
   {
     "id": "black-panther-s2",
     "heroId": "black-panther",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Bast Avatar",
+    "effect": "Increase Ultimate Ability base damage by 100 and Bast avatars summoned by three.",
     "keybind": ""
   },
   {
     "id": "black-widow-s1",
     "heroId": "black-widow",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Red Room Rifle 2099",
+    "effect": "Increase Red Room Rifle firing speed and magazine capacity by 80 percent.",
     "keybind": ""
   },
   {
     "id": "black-widow-s2",
     "heroId": "black-widow",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Sniper Elite",
+    "effect": "Straight Shooter deals 10 additional damage per hit, and each final hit permanently increases this damage by five, up to 260.",
     "keybind": ""
   },
   {
     "id": "hawkeye-s1",
     "heroId": "hawkeye",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "One Shot, Four Down",
+    "effect": "When releasing Piercing Arrow, additionally fire three Blast Arrows.",
     "keybind": ""
   },
   {
     "id": "hawkeye-s2",
     "heroId": "hawkeye",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Quick Draw",
+    "effect": "Accelerate Piercing Arrow charge speed by 0.3 seconds and Archer's Focus concentration accumulation speed by 100 percent.",
     "keybind": ""
   },
   {
     "id": "hela-s1",
     "heroId": "hela",
     "slot": 1,
-    "name": "",
-    "effect": "",
-    "keybind": ""
+    "name": "Soul Reaper",
+    "effect": "Increase Nightsword Thorn fire rate and magazine capacity by 70%.",
+    "keybind": "LMB"
   },
   {
     "id": "hela-s2",
     "heroId": "hela",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Split Nightsword Thorn",
+    "effect": "Increase Nightsword Thorn projectiles by four.",
     "keybind": ""
   },
   {
     "id": "human-torch-s1",
     "heroId": "human-torch",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Chongming Heritage",
+    "effect": "Reduce Blazing Blast cooldown by one second and increase Flame Field maximum duration by four seconds.",
     "keybind": ""
   },
   {
     "id": "human-torch-s2",
     "heroId": "human-torch",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Amaterasu",
+    "effect": "Flame Field deals additional damage per second equal to six percent of maximum health.",
     "keybind": ""
   },
   {
     "id": "iron-fist-s1",
     "heroId": "iron-fist",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Martial Art Master",
+    "effect": "Reduce Dragon's Defense cooldown by six seconds, and replace Yat Jee Chung Kuen with the Ultimate Ability version of Yat Jee Chung Kuen.",
     "keybind": ""
   },
   {
     "id": "iron-fist-s2",
     "heroId": "iron-fist",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Strength Taken, Strength Used",
+    "effect": "After Dragon's Defense blocks damage, increase Yat Jee Chung Kuen's damage based on the amount of blocked damage.",
     "keybind": ""
   },
   {
     "id": "iron-man-s1",
     "heroId": "iron-man",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Last Stand",
+    "effect": "Gain 250 Bonus Health and 600 Ultimate Ability Energy each time a teammate is KO'd.",
     "keybind": ""
   },
   {
     "id": "iron-man-s2",
     "heroId": "iron-man",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Proton Cannon",
+    "effect": "Increase Ultimate Ability base damage by 500 and range by five meters.",
     "keybind": ""
   },
   {
     "id": "magik-s1",
     "heroId": "magik",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Dance of Pain",
+    "effect": "Reduce the cooldown of Stepping Discs by two seconds for each time you take damage. Gain 200 Bonus Health upon unleashing Stepping Discs.",
     "keybind": ""
   },
   {
     "id": "magik-s2",
     "heroId": "magik",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Echo of Limbo",
+    "effect": "Increase the range of Eldritch Whirl by four meters and the duration of Limbo Demon summoned from Demon's Rage for six seconds.",
     "keybind": ""
   },
   {
     "id": "mister-fantastic-s1",
     "heroId": "mister-fantastic",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Rubber Boxer",
+    "effect": "Each Stretch Punch hit in normal state increases its range by one meter and boosts its damage by 10 percent in Inflated state.",
     "keybind": ""
   },
   {
     "id": "mister-fantastic-s2",
     "heroId": "mister-fantastic",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "New Reflexive Rubber",
+    "effect": "Reduce Reflexive Rubber cooldown by eight seconds, increase max damage absorption to 1,000, and gain Bonus Health based on absorbed damage when it ends.",
     "keybind": ""
   },
   {
     "id": "moon-knight-s1",
     "heroId": "moon-knight",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Random Items Go!!!!",
+    "effect": "Increase Crescent Dart and Moon Blade maximum bounces by three and reduce damage decay per bounce by 10 percent.",
     "keybind": ""
   },
   {
     "id": "moon-knight-s2",
     "heroId": "moon-knight",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Super Ankh",
+    "effect": "Reduce Ancient Ankh cooldown by eight seconds and increase Ankh pull range by two meters.",
     "keybind": ""
   },
   {
     "id": "namor-s1",
     "heroId": "namor",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Imperius Rex",
+    "effect": "Reduce Wrath of the Seven Seas cooldown by three seconds and extend Monstro Spawn berserk duration by two seconds.",
     "keybind": ""
   },
   {
     "id": "namor-s2",
     "heroId": "namor",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Monstro Spawns Army",
+    "effect": "Reduce Aquatic Dominion cooldown by nine seconds, increase Monstro Spawns limit by four, health by 50, and maximum duration by eight seconds.",
     "keybind": ""
   },
   {
     "id": "psylocke-s1",
     "heroId": "psylocke",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Shin Dance of the Butterfly",
+    "effect": "Increase Ultimate Ability base damage by 50 and reduce the interval between slashes by 0.2 seconds.",
     "keybind": ""
   },
   {
     "id": "psylocke-s2",
     "heroId": "psylocke",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Slash Combo",
+    "effect": "If the Ultimate Ability delivers a final hit, extend its duration by one second.",
     "keybind": ""
   },
   {
     "id": "scarlet-witch-s1",
     "heroId": "scarlet-witch",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Pure Chaos",
+    "effect": "Chaos Control can attack three targets simultaneously.",
     "keybind": ""
   },
   {
     "id": "scarlet-witch-s2",
     "heroId": "scarlet-witch",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Enhanced Seal",
+    "effect": "Increase Ultimate Ability range by four meters and bind duration by two seconds.",
     "keybind": ""
   },
   {
     "id": "spider-man-s1",
     "heroId": "spider-man",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Better Webs",
+    "effect": "Reduce Web Cluster cooldown by 1.5 seconds. Hitting an enemy additionally applies a binding effect for 0.5 seconds.",
     "keybind": ""
   },
   {
     "id": "spider-man-s2",
     "heroId": "spider-man",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "A More Friendly Neighborhood",
+    "effect": "Increase Ultimate Ability range by four meters and bind duration by two seconds.",
     "keybind": ""
   },
   {
     "id": "squirrel-girl-s1",
     "heroId": "squirrel-girl",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Mega Evolution Slingshot",
+    "effect": "Increase Burst Acorn firing speed and magazine capacity by 30 percent. Acorns hitting map edges trigger bounces.",
     "keybind": ""
   },
   {
     "id": "squirrel-girl-s2",
     "heroId": "squirrel-girl",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Acorn Bowling",
+    "effect": "When firing Burst Acorns, there is a 50 percent chance to fire Squirrel Guards simultaneously.",
     "keybind": ""
   },
   {
     "id": "star-lord-s1",
     "heroId": "star-lord",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Unfading Starlight",
+    "effect": "During Blaster Barrage, refresh additional duration for every 300 damage dealt.",
     "keybind": ""
   },
   {
     "id": "star-lord-s2",
     "heroId": "star-lord",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Real Legend",
+    "effect": "Ultimate Ability can lock onto and attack three enemies simultaneously.",
     "keybind": ""
   },
   {
     "id": "storm-s1",
     "heroId": "storm",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Perfect Storm",
+    "effect": "Reduce Goddess Boost cooldown by 10 seconds and decrease Thunderstorm enhancement lightning interval by one second.",
     "keybind": ""
   },
   {
     "id": "storm-s2",
     "heroId": "storm",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Wind Power Generator",
+    "effect": "Each Wind Blade hit has a 30 percent chance to trigger Chain Lightning.",
     "keybind": ""
   },
   {
     "id": "the-punisher-s1",
     "heroId": "the-punisher",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Microchip Implant",
+    "effect": "Increase Adjudication fire rate and magazine capacity by 50 percent, fire two additional projectiles, and gain Pierce.",
     "keybind": ""
   },
   {
     "id": "the-punisher-s2",
     "heroId": "the-punisher",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Insect Repellent Smokescreen",
+    "effect": "Reduce Scourge Grenade cooldown by four seconds and apply 10 percent Vulnerability on hit.",
     "keybind": ""
   },
   {
     "id": "winter-soldier-s1",
     "heroId": "winter-soldier",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Greater Kraken Impact",
+    "effect": "Increase Ultimate Ability slam range by three meters.",
     "keybind": ""
   },
   {
     "id": "winter-soldier-s2",
     "heroId": "winter-soldier",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Here We Go Again",
+    "effect": "For each match victory, if Winter Soldier survives, permanently increase his Ultimate Ability's insta-KO health threshold by four percent, up to a maximum of 75 percent.",
     "keybind": ""
   },
   {
     "id": "wolverine-s1",
     "heroId": "wolverine",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Immortal",
+    "effect": "Refresh Regenerative Healing Factor cooldown after dealing 800 damage.",
     "keybind": ""
   },
   {
     "id": "wolverine-s2",
     "heroId": "wolverine",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Quenchless Rage",
+    "effect": "Reduce Feral Leap cooldown by eight seconds and increase the percentage of extra damage from Berserk Claw Strike by three percent.",
     "keybind": ""
   },
   {
     "id": "adam-warlock-s1",
     "heroId": "adam-warlock",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Forge to Revive",
+    "effect": "Increase Ultimate Ability post-revival health by 100 and Invincible duration by two seconds.",
     "keybind": ""
   },
   {
     "id": "adam-warlock-s2",
     "heroId": "adam-warlock",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Fighting Nation Descent",
+    "effect": "Increase damage of allies revived by the Ultimate Ability by 80 percent for five seconds.",
     "keybind": ""
   },
   {
     "id": "cloak-and-dagger-s1",
     "heroId": "cloak-and-dagger",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Veil of Sky",
+    "effect": "Reduce Light Explosion and Terror Cape cooldown by nine seconds, and increase the width of Light Curtain and Dark Curtain by four meters.",
     "keybind": ""
   },
   {
     "id": "cloak-and-dagger-s2",
     "heroId": "cloak-and-dagger",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Entangled Light and Darkness",
+    "effect": "When releasing Light Curtain, simultaneously launch Dark Curtain; when releasing Dark Curtain, simultaneously launch Light Curtain.",
     "keybind": ""
   },
   {
     "id": "invisible-woman-s1",
     "heroId": "invisible-woman",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Best Guardian",
+    "effect": "Increase Guardian Shield radius by 2 meters, maximum health by 750, and recovery speed by 100 per second, while enhancing the slowdown effect on enemies passing through the Guardian Shield.",
     "keybind": ""
   },
   {
     "id": "invisible-woman-s2",
     "heroId": "invisible-woman",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Greater Psionic Vortex",
+    "effect": "Reduce Psionic Vortex cooldown by eight seconds, increase its range by two meters, and enhance its pulling effect.",
     "keybind": ""
   },
   {
     "id": "jeff-the-land-shark-s1",
     "heroId": "jeff-the-land-shark",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Looting Leviathan",
+    "effect": "Devouring 3+ enemies with the Ultimate Ability grants random Base Modules. Devour 4: Common 90%, Rare 8%, Epic 2%. Devour 5: Common 60%, Rare 30%, Epic 10%. Devour 6+: Common 0%, Rare 70%, Epic 30%.",
     "keybind": ""
   },
   {
     "id": "jeff-the-land-shark-s2",
     "heroId": "jeff-the-land-shark",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Split Water Columns",
+    "effect": "Joyful Splash fires two additional water columns.",
     "keybind": ""
   },
   {
     "id": "loki-s1",
     "heroId": "loki",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Final Illusion",
+    "effect": "Reduce Doppelganger cooldown by nine seconds, increase the maximum number of illusions to two, and boost healing coefficient by 50 percent.",
     "keybind": ""
   },
   {
     "id": "loki-s2",
     "heroId": "loki",
     "slot": 2,
-    "name": "",
-    "effect": "",
-    "keybind": ""
+    "name": "Loki's Sanctuary",
+    "effect": "Reduce Regeneration Domain cooldown by 18s, and increase Force Field Core health by 100.",
+    "keybind": "LSHIFT"
   },
   {
     "id": "luna-snow-s1",
     "heroId": "luna-snow",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Ice Shards Therapy",
+    "effect": "Ice Arts ice shards additionally heal for 20 percent of maximum health.",
     "keybind": ""
   },
   {
     "id": "luna-snow-s2",
     "heroId": "luna-snow",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Applause",
+    "effect": "Reduce Ice Arts cooldown by 10 seconds, increase ice shards' firing speed by 50 percent, and width by one meter.",
     "keybind": ""
   },
   {
     "id": "mantis-s1",
     "heroId": "mantis",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Natural Protection",
+    "effect": "Grant an additional Unstoppable effect to the target when unleashing Healing Flower, Allied Inspiration, or Natural Anger.",
     "keybind": ""
   },
   {
     "id": "mantis-s2",
     "heroId": "mantis",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "Floral Flourish",
+    "effect": "Healing Flower and Allied Inspiration provide extra boost effects to teammates around the target.",
     "keybind": ""
   },
   {
     "id": "rocket-raccoon-s1",
     "heroId": "rocket-raccoon",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Full-Time Medic",
+    "effect": "Increase Repair Mode fire rate and magazine capacity by 40 percent, extend Repair Mode duration by three seconds, and raise healing limit to 10.",
     "keybind": ""
   },
   {
     "id": "rocket-raccoon-s2",
     "heroId": "rocket-raccoon",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "B.R.B.A.S.A.P.",
+    "effect": "Reduce B.R.B. cooldown by 38 seconds and increase Beacon Limit by four. The Beacons can also revive themselves.",
     "keybind": ""
   },
   {
     "id": "ultron-s1",
     "heroId": "ultron",
     "slot": 1,
-    "name": "",
-    "effect": "",
+    "name": "Software Update",
+    "effect": "Reduce Imperative: Firewall cooldown by six seconds.",
     "keybind": ""
   },
   {
     "id": "ultron-s2",
     "heroId": "ultron",
     "slot": 2,
-    "name": "",
-    "effect": "",
+    "name": "One for All",
+    "effect": "Reduce giant drone's base healing efficiency; when releasing Imperative: Patch, all allies gain a giant drone.",
     "keybind": ""
   }
 ]

@@ -21,6 +21,23 @@ import { ULT_ARCHETYPES } from '../data/authored';
 
 import type { BattleField, BattleUnit } from './combat';
 
+/*
+ * M10 — Strengthen Module implementations do NOT live here. Following the M5
+ * split (this file = ult archetypes; `effects.ts` = Base Module behaviour), the
+ * 76 sourced Strengthen Modules get their registry, their `passive` /
+ * `onUlt` combat wiring and their completeness net in `./strengthen.ts`.
+ * `combat.ts` folds them in at battle build (`applyPassiveStrengthen`) and opens
+ * the `onUlt` self-buff in `maybeCastUlt`. Re-exported here for discoverability.
+ */
+export {
+  STRENGTHEN_SPECS,
+  applyPassiveStrengthen,
+  unitStrengthenUlt,
+  missingStrengthenHandlers,
+  staleStrengthenHandlers,
+  stubStrengthenHandlers,
+} from './strengthen';
+
 /** Centre an AoE burst on the caster's current target, else the caster itself. */
 function aoeCentre(field: BattleField, caster: BattleUnit): { readonly x: number; readonly y: number } {
   if (caster.targetId >= 0) {

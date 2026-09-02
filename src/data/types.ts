@@ -183,26 +183,32 @@ export interface BaseModule {
 }
 
 // ---------------------------------------------------------------------------
-// Strengthen Modules — M1 skeleton only
+// Strengthen Modules — M1 skeleton, populated in M10
 // ---------------------------------------------------------------------------
 
 /**
- * One of a hero's two Strengthen Module slots. In M1 every row carries only
- * `id` / `heroId` / `slot`; `name` / `effect` / `keybind` are deliberately empty
- * placeholders. Canonical names, effect text and keybinds are M10 work sourced
- * from the wiki and screenshots — they are NOT in this plan and must not be
- * invented here. See `authored.ts` → STRENGTHEN_JSON_IS_SKELETON.
+ * One of a hero's two Strengthen Module slots. M1 shipped `strengthen.json` as a
+ * 78-row skeleton carrying only `id` / `heroId` / `slot`, because the canonical
+ * strings live outside this repo. M10 sourced and filled `name` / `effect` /
+ * `keybind` — from `Screenshots/UBMP_STRENGTHEN_MODULE_PURCHASE_SCREEN.png` (the
+ * highest-authority source: Loki's Sanctuary, Soul Reaper, Ghost Thornlash Wall)
+ * and, for the rest, a secondary guide (see `docs/FIDELITY.md` for per-entry
+ * provenance and fidelity grade). Nothing here is invented: the two rows M10
+ * could not source (`emma-frost-s1`, `emma-frost-s2`) keep the empty skeleton
+ * strings and are listed in `src/sim/strengthen.ts` → `STRENGTHEN_SOURCING_GAPS`.
+ * `keybind` is `''` wherever no screenshot pinned it. The name stays
+ * `StrengthenModuleSkeleton` for import stability across M1–M9.
  */
 export interface StrengthenModuleSkeleton {
-  /** `${heroId}-s${slot}`, unique. */
+  /** `${heroId}-s${slot}`, unique — unchanged since M1 (M4/M6 state keys off it). */
   readonly id: string;
   readonly heroId: string;
   readonly slot: 1 | 2;
-  /** Empty in M1. Filled in M10. */
+  /** Canonical module name; `''` only for a documented sourcing gap. */
   readonly name: string;
-  /** Empty in M1. Filled in M10. */
+  /** Canonical effect text; `''` only for a documented sourcing gap. */
   readonly effect: string;
-  /** Empty in M1. Filled in M10 (e.g. "LSHIFT"). */
+  /** Bound-ability keybind (e.g. "LSHIFT", "LMB"); `''` where no screenshot pinned it. */
   readonly keybind: string;
 }
 

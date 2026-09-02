@@ -332,20 +332,24 @@ describe('modules.json', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Strengthen skeleton
+// Strengthen modules — M1 skeleton ids, M10 canonical text
 // ---------------------------------------------------------------------------
 
-describe('strengthen.json (M1 skeleton)', () => {
-  it('is 78 rows — 39 heroes x 2 slots — with unique ids', () => {
+/** M10 could not source these two — see the report + docs/FIDELITY.md. */
+const STRENGTHEN_GAP_IDS = ['emma-frost-s1', 'emma-frost-s2'];
+
+describe('strengthen.json', () => {
+  it('is 78 rows — 39 heroes x 2 slots — with unique ids UNCHANGED from M1', () => {
     expect(strengthen).toHaveLength(78);
     expect(new Set(strengthen.map((s) => s.id)).size).toBe(78);
+    // The M1 id rule is `${heroId}-s${slot}` — renumbering breaks M4/M6 state.
+    for (const s of strengthen) expect(s.id).toBe(`${s.heroId}-s${s.slot}`);
   });
 
   it('references every hero id exactly twice, once per slot', () => {
     const heroIds = new Set(heroes.map((h) => h.id));
     for (const s of strengthen) {
       expect(heroIds.has(s.heroId), `${s.id} heroId`).toBe(true);
-      expect(s.id).toBe(`${s.heroId}-s${s.slot}`);
     }
     for (const id of heroIds) {
       const slots = strengthen
@@ -356,12 +360,33 @@ describe('strengthen.json (M1 skeleton)', () => {
     }
   });
 
-  it('carries only id / heroId / slot — name, effect and keybind stay empty (M10 owns them)', () => {
+  it('every row is either fully populated (name + effect) or a documented sourcing gap', () => {
     for (const s of strengthen) {
-      expect(s.name, `${s.id} name`).toBe('');
-      expect(s.effect, `${s.id} effect`).toBe('');
-      expect(s.keybind, `${s.id} keybind`).toBe('');
+      if (STRENGTHEN_GAP_IDS.includes(s.id)) {
+        expect(s.name, `${s.id} gap name`).toBe('');
+        expect(s.effect, `${s.id} gap effect`).toBe('');
+        expect(s.keybind, `${s.id} gap keybind`).toBe('');
+      } else {
+        expect(s.name.trim().length, `${s.id} name`).toBeGreaterThan(0);
+        expect(s.effect.trim().length, `${s.id} effect`).toBeGreaterThan(0);
+      }
     }
+    // exactly the two known gaps, nothing more
+    expect(strengthen.filter((s) => s.name === '').map((s) => s.id).sort()).toEqual(
+      [...STRENGTHEN_GAP_IDS].sort(),
+    );
+  });
+
+  it('module names are unique, and keybinds (where set) are bare keycap glyphs', () => {
+    const names = strengthen.filter((s) => s.name !== '').map((s) => s.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const s of strengthen) {
+      if (s.keybind !== '') expect(s.keybind, `${s.id} keybind`).toMatch(/^[A-Z0-9]+$/);
+    }
+    // the three screenshot-verbatim rows carry their keybind chip
+    expect(strengthen.find((s) => s.id === 'loki-s2')?.keybind).toBe('LSHIFT');
+    expect(strengthen.find((s) => s.id === 'groot-s2')?.keybind).toBe('LSHIFT');
+    expect(strengthen.find((s) => s.id === 'hela-s1')?.keybind).toBe('LMB');
   });
 });
 
@@ -478,6 +503,17 @@ describe('constants.ts (canonical only)', () => {
     expect(C.SPEED_UP_DAMAGE_BONUS_PCT).toBe(120);
     expect(C.SPEED_UP_DAMAGE_MULTIPLIER).toBeCloseTo(2.2);
   });
+
+  it("Jeff's Looting Leviathan table is the plan's, and every row sums to 100", () => {
+    expect(C.LOOTING_LEVIATHAN_RARITY_TABLE).toEqual({
+      4: { common: 90, rare: 8, legendary: 2 },
+      5: { common: 60, rare: 30, legendary: 10 },
+      6: { common: 0, rare: 70, legendary: 30 },
+    });
+    for (const row of Object.values(C.LOOTING_LEVIATHAN_RARITY_TABLE)) {
+      expect(row.common + row.rare + row.legendary).toBe(100);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -512,9 +548,9 @@ describe('authored.ts (every non-canonical number, with provenance)', () => {
     });
   });
 
-  it('records the per-hero combat-stats exception and the strengthen skeleton marker', () => {
+  it('records the per-hero combat-stats exception; the strengthen skeleton marker is flipped by M10', () => {
     expect(A.AUTHORED_ELSEWHERE.perHeroCombatStats).toBe('heroes.json → combat');
-    expect(A.STRENGTHEN_JSON_IS_SKELETON).toBe(true);
+    expect(A.STRENGTHEN_JSON_IS_SKELETON).toBe(false); // M10 populated strengthen.json
   });
 
   it('every authored value export carries a provenance note', () => {

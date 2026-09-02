@@ -24,7 +24,70 @@ launch date).
 
 ## Status
 
-Milestone **M9** — the Canvas2D battle renderer and the battle HUD.
+Milestone **M10** — the 78 Strengthen Modules.
+
+The mode's per-hero modules: 39 heroes × 2. `src/data/strengthen.json`'s M1
+skeleton is now populated, **row ids unchanged** (`${heroId}-s${slot}` — M4 / M6
+state, tests and goldens key off them).
+
+**Sourcing is the honest half of this milestone.** The canonical strings live
+outside this repo and the mode has been removed from the game:
+
+- **3 modules** — *Loki's Sanctuary*, *Soul Reaper*, *Ghost Thornlash Wall* —
+  are transcribed **verbatim from the reward screenshot** (the highest-authority
+  source), inline keybind chips included (`LSHIFT` / `LMB` / `LSHIFT`).
+- **73 modules** come from a secondary guide (Destructoid). Names are
+  trustworthy; the effect *wording* is that outlet's style-normalised copy
+  ("percent" not "%", "seconds" not "s"), unverified against in-game text — and
+  their keybinds are unknown.
+- **2 modules** — both of Emma Frost's — **could not be sourced** and keep the
+  empty skeleton strings. The Fandom wiki, Mobalytics and the Wayback Machine
+  are all unreachable from the fetcher (402 / 403 / blocked); nothing was
+  invented to fill them.
+
+`docs/FIDELITY.md` records the provenance and fidelity grade of every one of the
+78 rows, the screenshot-versus-guide conflicts and how they were resolved, and
+the two gaps. `validate.ts` enforces "fully populated **or** a documented gap —
+never half"; `tests/strengthen.spec.ts` snapshots every name / effect / keybind
+**character-for-character**.
+
+**Implementations live in `src/sim/strengthen.ts`** (following the M5 split —
+`abilities.ts` = ult archetypes, `effects.ts` = Base-Module behaviour;
+`abilities.ts` re-exports the surface). M5 models no discrete abilities and no
+cooldowns, so **every one of the 76 implemented modules is an annotated
+approximation** — a `passive` stat delta folded into the hero's `ResolvedUnit`
+at battle build (59 modules), or an `onUlt` timed self-buff opened on the
+ultimate cast (17). Each spec carries a non-null `approximation` string naming
+the real mechanic and the substitute; `missingStrengthenHandlers` /
+`staleStrengthenHandlers` / `stubStrengthenHandlers` are the completeness net
+(all empty — no reachable `TODO`, no no-op handler).
+
+**Each module has a scenario descriptor and a forced-scenario "it does
+something" test.** A naive 1v1 false-negatives on situational effects, so every
+spec carries a `StrengthenScenario` (lineups, battle length, forced ult / health
+fraction, spawn geometry, the aggregate to measure) and the harness constructs
+it deterministically, then asserts a measurable delta between module-active and
+module-inactive runs at the same seed — 76 cases, one per module, never
+loosened.
+
+**Jeff the Land Shark's *Looting Leviathan*** grants Base Modules on its own
+rarity table (`4 → 90 / 8 / 2`, `5 → 60 / 30 / 10`, `6+ → 0 / 70 / 30` —
+plan-supplied) and **bypasses the derived shop-odds formula entirely**:
+`modules.ts` gains `lootingLeviathanRarityOdds` / `rollLootingLeviathanRarity` /
+`grantLootingLeviathanModules`, a path that never calls `rarityOdds` and never
+touches a shop draw; its 100 000-roll distribution test draws from a dedicated
+named substream so it cannot shift any other consumer's rolls.
+
+Combat threads each player's equipped Strengthen loadout into the resolver
+(`CombatContext.sideX.strengthen`), so the M8 **Reward screen lights up on its
+own** — real names, effect text and inline keybind chips, no renderer change —
+and the left-rail Strengthen counter increments as before. Real effects move
+combat outcomes, so **`tests/replay.spec.ts`'s golden replays were regenerated
+deliberately** (`determinism.spec.ts` is untouched, and a battle with no
+Strengthen modules keeps its pre-M10 digest byte-for-byte). The M7 AI
+distribution gate still holds.
+
+### M9 — the Canvas2D battle renderer and the battle HUD
 
 The renderer is split the same way the UI is, so it is testable without a real
 Canvas2D context (`jsdom` / `happy-dom` have none):
@@ -115,7 +178,8 @@ swap-on-collision so it can never double-occupy / exceed six / cross off-grid),
 ult-charge bars, damage numbers, the drone, monster tokens for Galacta Bots, the
 cursor-fed kill feed, `LSHIFT` / `E` buttons that grey exactly when the sim marks
 the ability spent, and the Speed Up Protocol announcement), **Reward** (renders
-`strengthen.json`'s M1 skeleton verbatim — nothing invented; lights up in M10),
+`strengthen.json` from data with no invented text — three gold cards, hero art,
+inline keybind chips; it lit up on its own in M10 with no renderer change),
 **Scoreboard** (fully public, six lineups, four protocol levels, Strengthen
 counts, top-3 divider), **Final Standings**, and the left-rail **protocol info
 pane** (tier bonuses with the earned one in cyan, the `★ = XP+1 …` legend, and
@@ -235,6 +299,20 @@ Delivered so far:
   `driveDrone` round-trip determinism. The two enforcement greps now also scan
   `src/render/**`. `docs/QA.md` §6 is the battle-HUD checklist against both
   battle screenshots with the camera / `LALT` deviations recorded.
+- **M10** — the 78 Strengthen Modules: `src/data/strengthen.json` populated (76
+  of 78 sourced — 3 screenshot-verbatim, 73 from a secondary guide; 2
+  unsourced and reported, never invented), `src/sim/strengthen.ts` (the module
+  registry, `applyPassiveStrengthen`, the `onUlt` self-buff, per-module scenario
+  descriptors, and the completeness net), `src/sim/modules.ts`'s isolated
+  *Looting Leviathan* rarity path, and the Strengthen wiring in `combat.ts`
+  (`CombatContext.sideX.strengthen` → passive folds + the `onUlt` window) and
+  `match.ts` (`strengthenOf` per side). `docs/FIDELITY.md` (new) is the
+  per-entry provenance record. `tests/strengthen.spec.ts` covers the 78-row
+  shape with M1 ids intact, the character-for-character text snapshot, the
+  registered/non-stub completeness net, the 76-case forced-scenario harness,
+  Jeff's 100 000-roll distribution within ±1 % of all three tables, and the
+  swap-conversion count invariant with real modules; `tests/replay.spec.ts`'s
+  golden replays were regenerated for the new combat outcomes.
 
 `src/sim/` and `src/ai/` are pure and headless — no DOM, no wall clock, no
 `Math.random`, no transcendental math (`Math.sin` / `cos` / `pow` / `hypot` /

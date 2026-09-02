@@ -8,8 +8,10 @@ import { GameApp } from '../src/ui/app';
 import { buildScene } from '../src/ui/chrome';
 import { renderScoreboard } from '../src/ui/screens/scoreboard';
 import { renderInfoPane } from '../src/ui/screens/infoPane';
+import { renderReward } from '../src/ui/screens/reward';
 import { scoreboardVM } from '../src/ui/viewmodels/scoreboard';
 import { protocolInfoVM } from '../src/ui/viewmodels/infoPane';
+import { rewardVM } from '../src/ui/viewmodels/reward';
 
 /*
  * Renderer smoke tests (happy-dom, scoped per-file). Proves the screens build
@@ -146,5 +148,23 @@ describe('screen renderers build DOM from view models', () => {
     const el = renderInfoPane(protocolInfoVM(state, 0, 'fortress'), () => {});
     expect(el.querySelectorAll('.bm-infopane__tier').length).toBe(3);
     expect(el.querySelectorAll('.bm-infopane__legend span').length).toBe(3);
+  });
+
+  // M10 — the M8 Reward screen was built to render from data with no invented
+  // text; with strengthen.json now populated it lights up on its own, and the
+  // pre-existing `.bm-keybind` chip affordance carries the screenshot keybinds.
+  it('reward screen renders real Strengthen name / effect text and a keybind chip', () => {
+    const offers = ['loki-s2', 'hela-s1', 'groot-s2']; // three screenshot-verbatim rows
+    const el = renderReward(rewardVM(state, offers, [], 0), { select: () => {}, refresh: () => {} });
+
+    const names = [...el.querySelectorAll('.bm-strcard__name')].map((n) => n.textContent);
+    expect(names).toEqual(["Loki's Sanctuary", 'Soul Reaper', 'Ghost Thornlash Wall']);
+
+    const effects = [...el.querySelectorAll('.bm-strcard__effect')].map((n) => n.textContent ?? '');
+    expect(effects[0]).toContain('Reduce Regeneration Domain cooldown by 18s');
+    expect(effects.every((t) => t.length > 20)).toBe(true); // no empty cards
+
+    const chips = [...el.querySelectorAll('.bm-keybind')].map((c) => c.textContent);
+    expect(chips).toEqual(['LSHIFT', 'LMB', 'LSHIFT']); // one inline chip per card
   });
 });

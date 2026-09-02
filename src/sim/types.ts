@@ -217,6 +217,13 @@ export interface CombatSide {
    * runs after and can override for tests.
    */
   readonly deployment?: Deployment | null;
+  /**
+   * M10 — this side's equipped Strengthen Modules, `heroId -> module ids`, taken
+   * from `PlayerState.strengthen.equipped` at battle start by `match.ts`. `null`
+   * / absent for the Galacta Bot side and for pre-M10 direct tests;
+   * `SimulateOptions.sideAStrengthen` / `.sideBStrengthen` still override it.
+   */
+  readonly strengthen?: Readonly<Record<string, readonly string[]>> | null;
 }
 
 export interface CombatContext {

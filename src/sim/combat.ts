@@ -67,6 +67,8 @@ import type { DroneColour, DroneSpec } from './drone';
 import { dronePolicy } from './dronePolicy';
 import type { DroneCommand } from './dronePolicy';
 import { galactaWave, resolvedFromGalacta } from './galacta';
+import { applyPassiveStrengthen, unitStrengthenUlt } from './strengthen';
+import type { UnitStrengthenUlt } from './strengthen';
 import {
   applyVulnStack,
   backupRebirthFraction,
@@ -222,6 +224,14 @@ export interface SimulateOptions {
   readonly speedUpTriggerTicks?: number;
   readonly sideAModules?: SideModules;
   readonly sideBModules?: SideModules;
+  /**
+   * M10 — equipped Strengthen Module ids per lineup hero, `heroId -> ids`.
+   * Overrides `ctx.sideA.strengthen` / `ctx.sideB.strengthen` when set; the
+   * resolver path uses the context. Passive modules fold into the unit's
+   * `ResolvedUnit`; `onUlt` modules arm a post-cast self-buff window.
+   */
+  readonly sideAStrengthen?: Readonly<Record<string, readonly string[]>>;
+  readonly sideBStrengthen?: Readonly<Record<string, readonly string[]>>;
   readonly externalActors?: readonly ExternalActorEvent[];
   /**
    * The Ultron Drones in this battle (M6). N drones, each with a `side` and an
@@ -303,6 +313,14 @@ export interface BattleUnit {
   vulnStacks: number;
   vulnPerStackPct: number;
   vulnTicks: number;
+
+  /** M10 — the `onUlt` Strengthen self-buff this unit arms on ult cast, or null. */
+  strenUltSpec: UnitStrengthenUlt | null;
+  /** M10 — ticks remaining on the armed `onUlt` window (0 = inactive). */
+  strenUltTicks: number;
+  strenUltDmgPct: number;
+  strenUltAtkSpdPct: number;
+  strenUltDmgTakenPct: number;
 }
 
 /**
@@ -653,6 +671,11 @@ function makeUnit(
     vulnStacks: 0,
     vulnPerStackPct: 0,
     vulnTicks: 0,
+    strenUltSpec: null,
+    strenUltTicks: 0,
+    strenUltDmgPct: 0,
+    strenUltAtkSpdPct: 0,
+    strenUltDmgTakenPct: 0,
   };
 }
 
@@ -685,12 +708,35 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
   const modA = opts.sideAModules ?? ctx.sideA.modules ?? emptySide();
   const units: BattleUnit[] = [];
 
+  // M10: equipped Strengthen Module ids per lineup hero. Passive modules fold
+  // into the unit's ResolvedUnit; `onUlt` modules arm a post-cast self-buff.
+  const strenA = opts.sideAStrengthen ?? ctx.sideA.strengthen ?? undefined;
+  const strenB = opts.sideBStrengthen ?? ctx.sideB.strengthen ?? undefined;
+  const pushHero = (
+    side: 0 | 1,
+    slot: number,
+    heroId: string,
+    resolved: ResolvedUnit,
+    stren: Readonly<Record<string, readonly string[]>> | undefined,
+  ): void => {
+    const ids = stren?.[heroId] ?? [];
+    const u = makeUnit(
+      units.length,
+      side,
+      slot,
+      heroId,
+      heroMeta(heroId),
+      ids.length > 0 ? applyPassiveStrengthen(resolved, ids) : resolved,
+      false,
+    );
+    if (ids.length > 0) u.strenUltSpec = unitStrengthenUlt(ids);
+    units.push(u);
+  };
+
   if (isPve) {
     // Galacta Bots (M6): team-agnostic Units built straight from the wave spec.
     const resolvedA = resolveUnits(lineupA, modA, [], emptySide());
-    lineupA.forEach((heroId, slot) => {
-      units.push(makeUnit(units.length, 0, slot, heroId, heroMeta(heroId), resolvedA[slot]!, false));
-    });
+    lineupA.forEach((heroId, slot) => pushHero(0, slot, heroId, resolvedA[slot]!, strenA));
     const wave = galactaWave(ctx.round);
     if (wave.length === 0) throw new RangeError(`combat: galactaWave(${ctx.round}) produced no units`);
     wave.forEach((spec, slot) => {
@@ -705,12 +751,8 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
     const modB = opts.sideBModules ?? ctx.sideB.modules ?? emptySide();
     const resolvedA = resolveUnits(lineupA, modA, lineupB, modB);
     const resolvedB = resolveUnits(lineupB, modB, lineupA, modA);
-    lineupA.forEach((heroId, slot) => {
-      units.push(makeUnit(units.length, 0, slot, heroId, heroMeta(heroId), resolvedA[slot]!, false));
-    });
-    lineupB.forEach((heroId, slot) => {
-      units.push(makeUnit(units.length, 1, slot, heroId, heroMeta(heroId), resolvedB[slot]!, false));
-    });
+    lineupA.forEach((heroId, slot) => pushHero(0, slot, heroId, resolvedA[slot]!, strenA));
+    lineupB.forEach((heroId, slot) => pushHero(1, slot, heroId, resolvedB[slot]!, strenB));
   }
 
   assignFormation(units);
@@ -749,6 +791,7 @@ function currentAttackIntervalTicks(u: BattleUnit): number {
   let attackSpeed = u.resolved.attackSpeed;
   if (u.rampageTicks > 0) attackSpeed *= 1 + RAMPAGE_ATTACK_SPEED_AND_LIFESTEAL_PCT / 100;
   if (u.selfBuffTicks > 0) attackSpeed *= 1 + u.selfBuffAttackSpeedPct / 100;
+  if (u.strenUltTicks > 0) attackSpeed *= 1 + u.strenUltAtkSpdPct / 100;
   return Math.max(1, Math.round(TICK_RATE_HZ / attackSpeed));
 }
 
@@ -771,6 +814,14 @@ function tickUnitEffects(field: BattleField, u: BattleUnit): void {
   }
   if (u.criticalDamageShellTicks > 0) u.criticalDamageShellTicks--;
   if (u.criticalCounterTicks > 0) u.criticalCounterTicks--;
+  if (u.strenUltTicks > 0) {
+    u.strenUltTicks--;
+    if (u.strenUltTicks === 0) {
+      u.strenUltDmgPct = 0;
+      u.strenUltAtkSpdPct = 0;
+      u.strenUltDmgTakenPct = 0;
+    }
+  }
   if (u.vulnTicks > 0) {
     u.vulnTicks--;
     if (u.vulnTicks === 0) {
@@ -883,6 +934,13 @@ function maybeCastUlt(field: BattleField, u: BattleUnit): void {
   }
   u.ultCasts++;
   castUlt(field, u);
+  // M10 — an `onUlt` Strengthen module arms its self-buff window on this cast.
+  if (u.strenUltSpec !== null) {
+    u.strenUltTicks = u.strenUltSpec.durationTicks;
+    u.strenUltDmgPct = u.strenUltSpec.dmgPct;
+    u.strenUltAtkSpdPct = u.strenUltSpec.atkSpdPct;
+    u.strenUltDmgTakenPct = u.strenUltSpec.dmgTakenPct;
+  }
 }
 
 function applyExternalActors(
@@ -1037,6 +1095,8 @@ function applyOneDamage(
     amt *= lastStandMultiplier(src);
     if (src.beamTicks > 0) amt *= 1 + src.beamBonusPct / 100;
     if (src.selfBuffTicks > 0 && source === 'primary') amt *= 1 + src.selfBuffDamagePct / 100;
+    // M10 — an `onUlt` Strengthen window amplifies the owner's own output.
+    if (src.strenUltTicks > 0 && src.strenUltDmgPct !== 0) amt *= 1 + src.strenUltDmgPct / 100;
     amt *= cumulativeDualMultiplier(field, src);
     if (field.tick <= INITIAL_WINDOW_TICKS) amt *= 1 + src.resolved.roundStartDamagePct / 100;
   }
@@ -1057,6 +1117,10 @@ function applyOneDamage(
   amt *= tgt.resolved.damageTakenMultiplier;
   if (tgt.criticalDamageShellTicks > 0) amt *= 1 - CRITICAL_DAMAGE_SHELL.reductionPct / 100;
   if (tgt.ultShieldTicks > 0) amt *= 1 - tgt.ultShieldReductionPct / 100;
+  // M10 — an `onUlt` Strengthen window can also reduce the owner's damage taken.
+  if (tgt.strenUltTicks > 0 && tgt.strenUltDmgTakenPct !== 0) {
+    amt *= 1 - tgt.strenUltDmgTakenPct / 100;
+  }
   if (amt < 0) amt = 0;
 
   // Critical Counter — while active, incoming damage becomes healing instead.
@@ -1212,6 +1276,9 @@ function foldTickIntoHash(field: BattleField): void {
         (u.ultShieldTicks > 0 ? 1 : 0),
     );
     h.mix(u.vulnStacks * 64 + u.criticalDamageShellTicks);
+    // M10 — only contributes when an `onUlt` Strengthen window is live, so a
+    // battle with no Strengthen modules keeps its pre-M10 digest byte-for-byte.
+    if (u.strenUltTicks > 0) h.mix(0x53545245 ^ u.strenUltTicks);
   }
   // Drone state — so the digest tracks drone INPUT (movement, beam, one-time
   // presses). Same-seed + same input stream ⇒ identical digest, and any change

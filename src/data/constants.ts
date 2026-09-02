@@ -110,6 +110,24 @@ export const MODULE_XP: Readonly<Record<Rarity, number>> = {
   legendary: 4,
 };
 
+/**
+ * PLAN-SUPPLIED (M10 milestone text): Jeff the Land Shark's Strengthen Module
+ * *Looting Leviathan* grants Base Modules on its OWN rarity table, keyed by how
+ * many enemies its Ultimate Ability devoured, and **bypasses the derived shop
+ * odds formula entirely**. The plan gives this table verbatim and it is the only
+ * Strengthen numeric data the plan provides — used exactly as written. Rows are
+ * `common / rare / legendary` percentages (the game calls Legendary "Epic"); the
+ * "6" row covers "devour 6 or more". Wired through `modules.lootingLeviathanRarityOdds`
+ * / `rollLootingLeviathanRarity`, which never touch `modules.rarityOdds`.
+ */
+export const LOOTING_LEVIATHAN_RARITY_TABLE: Readonly<
+  Record<4 | 5 | 6, Readonly<Record<Rarity, number>>>
+> = {
+  4: { common: 90, rare: 8, legendary: 2 },
+  5: { common: 60, rare: 30, legendary: 10 },
+  6: { common: 0, rare: 70, legendary: 30 },
+};
+
 /** Canonical (Module system table): sell value by rarity — 4 / 9 / 14. */
 export const MODULE_SELL: Readonly<Record<Rarity, number>> = {
   common: 4,

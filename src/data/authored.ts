@@ -582,15 +582,15 @@ export const AUTHORED_ELSEWHERE = {
 } as const;
 
 /**
- * `strengthen.json` is an M1 skeleton: 78 rows (39 heroes × 2 slots) carrying
- * only `id` / `heroId` / `slot`, with empty `name` / `effect` / `keybind`
- * placeholders. Canonical Strengthen Module names, effect text and keybinds are
- * M10 work, sourced from the wiki and screenshots — they are NOT in this plan
- * and must not be invented. (JSON carries no comments, so this note stands in
- * for the file header alongside the doc on `StrengthenModuleSkeleton` in
- * `types.ts`.)
+ * M1 shipped `strengthen.json` as a 78-row skeleton (id / heroId / slot only);
+ * M10 sourced and populated `name` / `effect` / `keybind` and flipped this to
+ * `false`. Kept as a historical marker and as the flag `validate.ts` keys its
+ * "names/effects are non-empty" checks on. 76 of 78 rows are populated: the two
+ * exceptions (`emma-frost-s1`, `emma-frost-s2`) could not be sourced and keep
+ * the empty skeleton strings — see `src/sim/strengthen.ts` →
+ * `STRENGTHEN_SOURCING_GAPS` and `docs/FIDELITY.md`. Nothing was invented.
  */
-export const STRENGTHEN_JSON_IS_SKELETON = true;
+export const STRENGTHEN_JSON_IS_SKELETON = false;
 
 // ===========================================================================
 // AUTHORED bands for the per-hero combat stats in heroes.json
@@ -701,7 +701,7 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   AUTHORED_ELSEWHERE:
     "Pointer, not a value. Per-hero combat stats are AUTHORED but stored in heroes.json → combat by the ledger's deliberate exception (base health there is canonical); Galacta Bot archetypes + wave composition are AUTHORED (M6) in galacta.json by the same exception.",
   STRENGTHEN_JSON_IS_SKELETON:
-    'Marker, not a value. strengthen.json ships id/heroId/slot only in M1; names, effect text and keybinds are M10 (wiki + screenshots) and must not be invented.',
+    'Marker, not a tuning value. M1 shipped strengthen.json as an id/heroId/slot skeleton; M10 populated 76 of 78 rows from the reward screenshot (verbatim: Loki\'s Sanctuary, Soul Reaper, Ghost Thornlash Wall) and a secondary guide, and flipped this to false. The two unsourced rows (emma-frost-s1/s2) keep empty strings. Provenance per entry: docs/FIDELITY.md.',
   COMBAT_BANDS:
     'AUTHORED. The M1 milestone band table; per-hero picks in heroes.json must land inside it. M11 re-tunes against the M7 win-rate gate.',
 

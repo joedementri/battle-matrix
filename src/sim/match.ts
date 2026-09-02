@@ -474,6 +474,13 @@ function sideModulesOf(p: WorkPlayer): SideModules {
   };
 }
 
+/** This player's equipped Strengthen Modules, `heroId -> ids` (M10). A fresh copy. */
+function strengthenOf(p: WorkPlayer): Readonly<Record<string, readonly string[]>> {
+  const out: Record<string, readonly string[]> = {};
+  for (const [heroId, ids] of Object.entries(p.strengthen.equipped)) out[heroId] = ids.slice();
+  return out;
+}
+
 /** A fresh copy of this player's board deployment (or `null` = engine formation). */
 function deploymentOf(p: WorkPlayer): Deployment | null {
   return p.deployment === null ? null : p.deployment.map((c) => ({ col: c.col, row: c.row }));
@@ -859,6 +866,8 @@ function combatContextFor(
     // per matchup). `SimulateOptions` still overrides for M5 direct tests.
     modules: sideModulesOf(a),
     deployment: deploymentOf(a),
+    // M10 — equipped Strengthen Modules (heroId -> ids).
+    strengthen: strengthenOf(a),
   };
 
   let sideB: CombatContext['sideB'];
@@ -870,10 +879,11 @@ function combatContextFor(
       isGalactaBots: true,
       modules: null,
       deployment: null,
+      strengthen: null,
     };
   } else if (m.kind === 'phantom') {
     // An eliminated player's state is frozen at elimination, so their current
-    // modules / deployment ARE their phantom modules / deployment.
+    // modules / deployment / Strengthen ARE their phantom loadout.
     const owner = work.players[m.b]!;
     sideB = {
       playerId: m.b,
@@ -882,6 +892,7 @@ function combatContextFor(
       isGalactaBots: false,
       modules: sideModulesOf(owner),
       deployment: deploymentOf(owner),
+      strengthen: strengthenOf(owner),
     };
   } else {
     // pvp or mirror — a copy of the opponent/source's living lineup + build
@@ -893,6 +904,7 @@ function combatContextFor(
       isGalactaBots: false,
       modules: sideModulesOf(other),
       deployment: deploymentOf(other),
+      strengthen: strengthenOf(other),
     };
   }
 

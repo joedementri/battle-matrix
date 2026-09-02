@@ -398,6 +398,15 @@ function validateModules(add: Add): void {
   }
 }
 
+/**
+ * M10 sourcing gaps — the only rows allowed to keep the empty skeleton strings.
+ * Both Emma Frost modules were absent from every reachable source (the wiki and
+ * mobalytics return 402/403 to the fetcher; the one complete guide omits her).
+ * Any OTHER blank row is a regression, not a gap.
+ */
+const STRENGTHEN_GAP_IDS = new Set(['emma-frost-s1', 'emma-frost-s2']);
+const KEYCAP = /^[A-Z0-9]+$/;
+
 function validateStrengthen(add: Add): void {
   if (strengthen.length !== 78) {
     add('strengthen/count', `expected 78 strengthen rows, got ${strengthen.length}`);
@@ -405,6 +414,7 @@ function validateStrengthen(add: Add): void {
 
   const heroIds = new Set(heroes.map((h) => h.id));
   const seenRow = new Set<string>();
+  const seenName = new Set<string>();
   const perHero = new Map<string, number[]>();
 
   for (const s of strengthen) {
@@ -416,8 +426,29 @@ function validateStrengthen(add: Add): void {
     if (s.id !== `${s.heroId}-s${s.slot}`) {
       add('strengthen/id-rule', `${s.id}: expected id "${s.heroId}-s${s.slot}"`);
     }
-    if (s.name !== '' || s.effect !== '' || s.keybind !== '') {
-      add('strengthen/skeleton', `${s.id}: name/effect/keybind must be empty in the M1 skeleton (do not invent M10 data)`);
+
+    // M10: `name` and `effect` are populated for every row except a documented
+    // sourcing gap. A gap must be fully empty; a populated row must be fully
+    // populated (never half). `keybind` is optional (only the screenshot pins it).
+    const isGap = STRENGTHEN_GAP_IDS.has(s.id);
+    if (isGap) {
+      if (s.name !== '' || s.effect !== '' || s.keybind !== '') {
+        add('strengthen/gap-not-empty', `${s.id}: a documented sourcing gap must keep empty name/effect/keybind`);
+      }
+    } else {
+      if (typeof s.name !== 'string' || s.name.trim().length === 0) {
+        add('strengthen/name', `${s.id}: name must be non-empty (or add it to STRENGTHEN_GAP_IDS and report it)`);
+      }
+      if (typeof s.effect !== 'string' || s.effect.trim().length === 0) {
+        add('strengthen/effect', `${s.id}: effect must be non-empty (or add it to STRENGTHEN_GAP_IDS and report it)`);
+      }
+      if (s.name !== '' && seenName.has(s.name)) {
+        add('strengthen/name-unique', `duplicate strengthen name: "${s.name}"`);
+      }
+      seenName.add(s.name);
+    }
+    if (s.keybind !== '' && !KEYCAP.test(s.keybind)) {
+      add('strengthen/keybind', `${s.id}: keybind "${s.keybind}" is not a bare keycap glyph`);
     }
 
     const slots = perHero.get(s.heroId) ?? [];
@@ -539,6 +570,22 @@ function validateConstants(add: Add): void {
     'PHASE_COUNT must be {battle:3, practice:4}',
   );
   check(C.SPEED_UP_DAMAGE_BONUS_PCT === 120, 'const/speed-up', 'SPEED_UP_DAMAGE_BONUS_PCT must be 120');
+
+  // Jeff's Looting Leviathan table — plan-supplied, used exactly as written, and
+  // every row must sum to 100 so it is a valid rarity distribution.
+  check(
+    eq(C.LOOTING_LEVIATHAN_RARITY_TABLE, {
+      4: { common: 90, rare: 8, legendary: 2 },
+      5: { common: 60, rare: 30, legendary: 10 },
+      6: { common: 0, rare: 70, legendary: 30 },
+    }),
+    'const/looting-leviathan',
+    'LOOTING_LEVIATHAN_RARITY_TABLE must be the plan table 90/8/2 · 60/30/10 · 0/70/30',
+  );
+  for (const [tier, row] of Object.entries(C.LOOTING_LEVIATHAN_RARITY_TABLE)) {
+    const sum = row.common + row.rare + row.legendary;
+    check(sum === 100, 'const/looting-leviathan-sum', `Looting Leviathan tier ${tier} sums to ${sum}, not 100`);
+  }
 
   const tb = C.PROTOCOL_TIER_BONUSES;
   check(eq(tb.fortress, [{ maxHealth: 120 }, { maxHealth: 120 }, { maxHealth: 240 }]), 'const/tier/fortress', 'Fortress tier bonuses must be 120 / 120 / 240 max health');
