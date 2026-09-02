@@ -126,12 +126,31 @@ export interface DeployAction {
 }
 
 /**
+ * Module Draw phase (M8): swap `outgoing` (a hero in the active lineup) for
+ * `incoming` (a hero NOT in the lineup). The Change-Hero role-offer flow that
+ * decides the candidate set is a UI concern; the sim only validates legality
+ * (`outgoing` active, `incoming` not, `tokens >= CHANGE_HERO_COST`), charges the
+ * swap cost, and converts the outgoing hero's equipped Strengthen Modules back
+ * to selectable ones (`modules.swapHeroAndConvertStrengthen`). Ignored outside
+ * Module Draw. Unlike a mid-battle swap, this one is applied to the working
+ * lineup immediately — the "takes effect next round" deferral is not modelled
+ * here (documented in the M8 report).
+ */
+export interface SwapHeroAction {
+  readonly type: 'swapHero';
+  readonly incoming: string;
+  readonly outgoing: string;
+}
+
+/**
  * The action vocabulary. Later milestones extend this union in place — the
  * machine already skips any action it does not recognise for the current phase,
  * so adding members is non-breaking:
+ *   M8: swapHero (Module Draw) — the Change-Hero / swap-out screens. The role
+ *       offer set is chosen in the UI (`sim/selectors.changeHeroOfferIds`); the
+ *       action carries only the resolved incoming/outgoing pair.
  *   M7: buyModule / sellModule / refreshShop / lockShop (Module Draw) · deploy
- *       (Select Position). changeHero / swapHero are still deferred to M8 — they
- *       need the role-offer + swap-out flow, not just a primitive call.
+ *       (Select Position).
  *   M6: selectReward / refreshReward (the Practice reward phase)
  *   M9: driveDrone (per-tick live capture — recorded input for the sim's drone seam)
  */
@@ -145,7 +164,8 @@ export type Action =
   | SellModuleAction
   | RefreshShopAction
   | LockShopAction
-  | DeployAction;
+  | DeployAction
+  | SwapHeroAction;
 
 // ---------------------------------------------------------------------------
 // Injected combat — M2 ships a stub; M5 swaps in the real resolver, untouched

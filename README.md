@@ -11,7 +11,7 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start the Vite dev server |
+| `npm run dev` | Start the Vite dev server (playable UI shell) |
 | `npm run build` | Type-check, then produce a production build in `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm test` | Run the Vitest suite once |
@@ -19,62 +19,71 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 | `npm run test:determinism` | Same-seed replay hashing — phase-boundary hashes for a full match, the 100× tick-by-tick combat digest, and the committed golden replays |
 | `npm run lint` | Lint with ESLint |
 
+Append `#seed=<n>` to the URL to pin a match (default: `20250606`, the mode's
+launch date).
+
 ## Status
 
-Milestone **M7** — the AI opponents.
+Milestone **M8** — the UI shell, chrome, and menu screens.
 
-Five archetype policy bundles live in `src/ai/` (pure and headless, under the
-same ESLint override + grep test as `src/sim/`). Each is a bundle over **draft**
-(`src/ai/draft.ts`), the **module-shop turn** (`src/ai/shop.ts` drives
-`buyModule` / `refreshShop` / `lockShop` from a small `ShopPlan`, and *throws*
-if a policy ever asks for something the library would refuse — an illegal ask
-is a test failure, not a silent no-op), and **board deployment**
-(`src/ai/deploy.ts` builds a 6×4 `Deployment` from the plan's role heuristic:
-Vanguards front, ranged Duelists back, melee Duelists flanking, Strategists
-back-centre). The shared **drone policy** (`src/sim/dronePolicy.ts`, which
-replaces the M6 placeholder wholesale) tracks the nearest enemy, holds the
-Encephalo-Ray while an enemy lives, and fires One-Time Damage / Healing at the
-plan's ≥ 3 / ≥ 2 low-HP thresholds — RNG-free.
+The UI is split in two, so "no game rule lives in a component" is structural
+rather than a matter of discipline:
 
-To make an archetype's *spending* actually influence a win rate, M7 also **wired
-M4's module economy and a new deployment model into the round loop**:
-`PlayerState` now carries `ownedModules` / `protocolXp` / `shop` /
-`tokenLedger` / `deployment`; the shop opens for every living player each
-Module Draw phase from a **per-player, per-round substream** (`shop:<id>#round`,
-honouring `SHOP_LOCK_BEHAVIOUR` carry-over); a thin adapter projects a player
-into the `ModuleAccount` shape `modules.ts` / `economy.ts` already use so
-`PlayerState.tokens` stays the one balance; and each side's resolved
-`SideModules` + `Deployment` ride on `CombatContext` into `combat.ts`, which
-resolves the deployment on the `selectPosition` seam and falls back to
-`assignFormation` when none is supplied. `src/sim/board.ts` is the pure board
-model — validity predicate plus the single cell→arena mapping `combat.ts` now
-shares.
+- **View models** (`src/ui/viewmodels/`) — pure `state → plain data` functions.
+  Every screenshot-derived assertion is tested here, no DOM environment needed
+  (`tests/hud.spec.ts`). All numeric derivation calls a `src/sim` export
+  (`economy.previewIncome`, `modules.rarityOdds` / `shopCardValue` / `ownedValue`,
+  the new `src/sim/selectors.ts`); the UI layer may only *format*.
+- **Renderers** (`src/ui/screens/`, `src/ui/chrome/`) — thin view-model → DOM,
+  hand-rolled vanilla TS + a ~50-line `h()` helper (runtime `dependencies` stays
+  `{}`; `happy-dom` is a **devDependency**, scoped per-file with
+  `// @vitest-environment happy-dom`).
 
-Every bot decision draws from a substream keyed by that seat's id
-(`ai:<id>#0` draft, `shop:<id>#round`, `ai:<id>:deploy#round`), so — proven in
-`tests/ai.spec.ts` — **adding a bot, changing one bot's archetype, or one bot
-drawing far more values shifts no other seat's substream cursors or state.**
-`RunMatchOptions.ai` (`'aiOnly'` or a per-seat map) drives a fully AI-only
-match; seat → archetype rotates by `masterSeed % 5` so the sixth seat's
-doubled archetype rotates too and no archetype is confounded with a fixed seat.
+**The game loop lives in the UI, not the sim** (`src/sim/` has no clock).
+`src/ui/app.ts` (`GameApp`) owns `requestAnimationFrame` + the wall clock, an
+append-only `Action[]`, and a phase cursor into the boundary list `runMatch`
+returns; every user gesture becomes exactly one sim `Action` and screens route
+off `state.phaseKind`. Bot turns resolve inside `runMatch` through `src/ai/` —
+the right-hand player list and the scoreboard render the real archetypes' state.
+The full round trip (Draft → Module Draw → Select Position → Battle → Reward →
+round 2, against the real combat resolver) is driven from on-screen controls in
+`tests/ui-render.spec.ts`.
 
-Over **100 seeded AI-only matches** every archetype wins between 5 % and 50 %
-(measured: 14–23 %; ~9 s inside `npm test`). The five bots also field exactly
-six heroes and a legal 6-cell deployment every round, a 10 000-turn shop fuzz
-finds no illegal ask / negative balance / over-starred module, and token
-conservation (`earned + refunded === spent + tokens`) holds for every player at
-every phase boundary.
+Nine screens plus the persistent chrome: **Draft**, **Module Draw** (all three
+tabs, the rarity-odds row, `PURCHASE`/`UPGRADE` cards with the level-1 value and
+owned-level star row, red-when-unaffordable price, empty-slot-after-purchase,
+`LOCK` → `REFRESH` disabled + padlock on four), **Change Hero** (3 / 6 / 3 role
+offers), **Swap-out** (Reserve above Active, confirm gated on one of each),
+**Select Position** (6×4 own-half grid, drag-and-drop *and* keyboard placement,
+swap-on-collision so it can never double-occupy / exceed six / cross off-grid),
+**Battle** (M8 shell only — the Canvas2D renderer is M9), **Reward** (renders
+`strengthen.json`'s M1 skeleton verbatim — nothing invented; lights up in M10),
+**Scoreboard** (fully public, six lineups, four protocol levels, Strengthen
+counts, top-3 divider), **Final Standings**, and the left-rail **protocol info
+pane** (tier bonuses with the earned one in cyan, the `★ = XP+1 …` legend, and
+Owned Modules at their *cumulative* value). Hero art is one abstract role token
+(shield / blade / cross + 2-letter initials + Strengthen pip), resolved through
+a single `resolveHeroArt` so a later image drop-in touches one file.
 
-**Human-seat plumbing** (`buyModule` / `sellModule` / `refreshShop` /
-`lockShop` / `deploy` actions) is wired thinly; with no such actions the human
-makes no purchases and takes the engine formation. `changeHero` / `swapHero`
-are deferred to M8 — they need the role-offer + swap-out flow, not just a
-primitive call.
+**Colour tokens are defined once**, in `src/ui/theme.css`; `tests/theme.spec.ts`
+reads that file and asserts every hex from the plan's table. Two enforcement
+greps back the architecture: **no arithmetic on tokens / health / XP outside
+`src/sim/`** (`tests/enforce-no-arith.spec.ts` — bar fills use CSS `calc()` over
+custom properties, so the allowlist is *empty*) and **every visible string comes
+from `strings.ts`** (`tests/enforce-strings.spec.ts` — one allowlist entry, the
+`text/plain` drag-and-drop MIME type). `docs/QA.md` is the side-by-side
+screenshot checklist, one row per screen, with the responsive / reduced-motion
+record.
 
-The archetypes drafting, spending and deploying changed the M6 golden replay
-outcomes; `tests/replay.spec.ts` was regenerated deliberately in two verified
-steps (documented in the file header) — no determinism test was weakened, and
-`tests/determinism.spec.ts` is untouched.
+The one sim-facing addition is `swapHero` in the `Action` union (wired through
+the existing M4 swap primitives, no `MatchState` shape change) and the pure
+`src/sim/selectors.ts` (`leftRailMeter`, health-descending / scoreboard
+ordering, the info-pane tier rows, and the Change-Hero / Reward offer sets the
+sim computes but does not persist). `tsconfig` gained `"DOM"` in `lib` — additive
+type declarations, not a strictness change; `src/sim` / `src/ai` headlessness is
+still enforced by the ESLint override and the grep. **The determinism and golden
+replay hashes are byte-identical to M7** — no existing action list emits the new
+members.
 
 Delivered so far:
 
@@ -131,11 +140,28 @@ Delivered so far:
   distribution gate with its per-archetype table; `tests/match.spec.ts` gains
   the shop-opens / purchase-persists / XP-accumulates / deployment-persists
   checks and `src/sim/board.ts` validity.
+- **M8** — the UI: `src/ui/theme.css` (colour tokens, asserted by
+  `tests/theme.spec.ts`), `src/ui/viewmodels/` (pure `state → data`),
+  `src/ui/chrome/` + `src/ui/screens/` (view-model → DOM renderers),
+  `src/ui/app.ts` (`GameApp` — the `requestAnimationFrame` loop, the append-only
+  action list + phase cursor, every gesture → one sim action), `src/ui/dom.ts` /
+  `heroArt.ts` / `heroToken.ts` / `format.ts` / `intents.ts`, and
+  `src/sim/selectors.ts` + the `swapHero` action. `tests/hud.spec.ts`
+  (income preview vs `previewIncome` over 500 states, the rarity-odds row for
+  all 256 protocol-level combinations, left-rail meters at every XP 0–60, the
+  shop-card / lock / change-hero / swap-out / scoreboard view models against the
+  screenshot values), `tests/ui-actions.spec.ts` (every UI action → a legal sim
+  action; drag-and-drop legality over 5 000 random drops), `tests/ui-render.spec.ts`
+  (happy-dom renderer smoke + a full-round `GameApp` walk), and the two
+  enforcement greps. `docs/QA.md` pairs each screen with its screenshot.
 
 `src/sim/` and `src/ai/` are pure and headless — no DOM, no wall clock, no
 `Math.random`, no transcendental math (`Math.sin` / `cos` / `pow` / `hypot` /
 `**` — direction is normalised vector math, sqrt only), no `ui/` / `render/`
-imports — enforced by an ESLint override *and* a grep test.
+imports — enforced by an ESLint override *and* a grep test. `src/ui/` inverts
+the dependency (it reads `src/sim`, never the reverse) and its own greps keep
+game rules out of the components: no arithmetic on tokens / health / XP, and
+every visible string sourced from `src/data/strings.ts`.
 
 See [`PLANS/ultron-battle-matrix-protocol.md`](PLANS/ultron-battle-matrix-protocol.md)
 for the full roadmap.

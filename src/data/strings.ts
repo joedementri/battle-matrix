@@ -21,6 +21,40 @@
 /** Role as shown in UI copy (title case), distinct from the lowercase `Role` id. */
 export type DisplayRole = 'Vanguard' | 'Duelist' | 'Strategist';
 
+/** `Role` id → the title-case name UI copy uses. Source: the plan's roster table. */
+export const ROLE_DISPLAY_NAME: Readonly<Record<'vanguard' | 'duelist' | 'strategist', DisplayRole>> = {
+  vanguard: 'Vanguard',
+  duelist: 'Duelist',
+  strategist: 'Strategist',
+};
+
+/**
+ * `Protocol` id → the proper noun the UI shows (`Protocol: Fortress`, the
+ * left-rail tooltip, the info-pane header). Source: the plan's "Protocol level
+ * bonuses" table and the "Colour tokens" table.
+ */
+export const PROTOCOL_DISPLAY_NAME: Readonly<
+  Record<'fortress' | 'onslaught' | 'reboot' | 'equilibrium', string>
+> = {
+  fortress: 'Fortress',
+  onslaught: 'Onslaught',
+  reboot: 'Reboot',
+  equilibrium: 'Equilibrium',
+};
+
+/**
+ * Short labels for the numeric keys in `PROTOCOL_TIER_BONUSES`, used only by the
+ * info-pane tier rows. Source: the plan's "Protocol level bonuses" table wording
+ * plus the two info-pane screenshots ("Maximum Health", "Healing Amount").
+ */
+export const STAT_LABEL: Readonly<Record<string, string>> = {
+  maxHealth: 'Max Health',
+  damagePct: 'Damage Output',
+  healingPct: 'Healing Amount',
+  maxHealthPerUniqueRole: 'Max Health / unique role',
+  damageAndHealingPctPerUniqueRole: 'Damage & Healing / unique role',
+};
+
 // ---------------------------------------------------------------------------
 // Mode identity / Draft
 // ---------------------------------------------------------------------------
@@ -70,6 +104,8 @@ export const BTN_UNLOCK = 'UNLOCK';
 export const BTN_SELECT = 'SELECT';
 export const BTN_CONFIRM = 'CONFIRM';
 export const BTN_CANCEL = 'CANCEL';
+/** Select Position primary button. Screenshot: `EXIT EDITING` / `DEPLOY`. (`B DEPLOY` is the key hint.) */
+export const BTN_DEPLOY = 'DEPLOY';
 
 /** Shop footer under a locked card. NO trailing period (verbatim). */
 export const LOCKED_MODULES_FOOTER =
@@ -169,6 +205,13 @@ export const COL_INITIATE_PROTOCOL = 'Initiate Protocol';
 
 /** Health cell for an eliminated (phantom) player. */
 export const OUT_OF_PLAY = 'Out of Play';
+
+/**
+ * Final-standings screen title (screen 9). No screenshot exists for this screen;
+ * the plan says keep it "consistent with the scoreboard's language", so this is
+ * authored to match the scoreboard's `Rank` framing.
+ */
+export const FINAL_STANDINGS = 'FINAL STANDINGS';
 
 // ---------------------------------------------------------------------------
 // Contextual key hints

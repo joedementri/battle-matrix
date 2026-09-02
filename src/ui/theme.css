@@ -1,17 +1,66 @@
 /*
- * Battle Matrix theme tokens. The full colour system (protocol blues/reds/greens,
- * rarity stars, streak badges) lands in M8; M0 uses only the two anchors:
- * dark-navy ground and the single gold accent.
+ * Battle Matrix — theme tokens and layout for the M8 UI shell.
+ *
+ * COLOUR TOKENS ARE DEFINED ONCE, HERE. `tests/theme.spec.ts` reads this file
+ * and asserts every hex from the plan's "Colour tokens" table is present as a
+ * custom property, so an accidental edit fails loudly. No TS module mirrors
+ * these — the UI reads them through `var(--bm-*)` / `getComputedStyle`.
+ *
+ * Win / loss streak green & red are unspecified by the plan; authored here and
+ * noted in the M8 report.
  */
 
 :root {
+  /* --- Ground / chrome (panel navy #161B2B) --- */
   --bm-ground: #161b2b;
   --bm-ground-raised: #1d2438;
+  --bm-ground-sunken: #10131f;
+  --bm-panel: #1b2135;
+  --bm-panel-2: #232b42;
+  --bm-border: #2b3350;
+  --bm-border-strong: #3a4468;
+
+  /* --- Accent (accent gold #FFC800) --- */
   --bm-accent: #ffc800;
+  --bm-accent-dim: #b98f0a;
+
+  /* --- Ink --- */
   --bm-ink: #eef1f8;
   --bm-ink-dim: #9aa3ba;
-  --bm-border: #2b3350;
+  --bm-ink-faint: #6b7590;
+  --bm-cyan: #4fd6e0;
+
+  /* --- Protocol colours --- */
+  --bm-fortress: #4a6bd8;
+  --bm-onslaught: #c8383c;
+  --bm-reboot: #2e9e5b;
+  --bm-equilibrium: #8b44c4;
+
+  /* --- Rarity star colours --- */
+  --bm-star-common: #6e8be8;
+  --bm-star-rare: #e040c0;
+  --bm-star-legendary: #ffd400;
+
+  /* --- Strengthen + Change Hero --- */
+  --bm-strengthen: #e8a020;
+  --bm-change-hero: #9a8fd8;
+
+  /* --- Streak badges (authored — see M8 report) --- */
+  --bm-streak-win: #3fb964;
+  --bm-streak-loss: #d8433d;
+
+  /* --- Danger (unaffordable price) --- */
+  --bm-danger: #ff5a52;
+
+  /* --- Layout metrics --- */
+  --bm-rail-w: 76px;
+  --bm-panel-w: 236px;
+  --bm-topbar-h: 74px;
+  --bm-radius: 6px;
+  --bm-gap: 12px;
+
   color-scheme: dark;
+  --bm-font: "Roboto Condensed", "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
 }
 
 *,
@@ -28,68 +77,988 @@ body {
 body {
   margin: 0;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6vw 5vw;
   background:
-    radial-gradient(125% 90% at 50% -10%, #202744 0%, var(--bm-ground) 62%),
+    radial-gradient(120% 80% at 50% -20%, #202744 0%, var(--bm-ground) 60%),
     var(--bm-ground);
   color: var(--bm-ink);
-  font-family: "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--bm-font);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 
-.title-screen {
-  width: min(680px, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  text-align: center;
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
 }
 
-.title-screen__eyebrow {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.42em;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--bm-accent);
+button {
+  font-family: inherit;
+  color: inherit;
 }
 
-.title-screen__title {
-  margin: 0;
+/* Heavy italic condensed uppercase — the mode's heading voice. */
+.bm-h1,
+.bm-h2,
+.bm-screen-title {
   font-style: italic;
   font-weight: 800;
   font-stretch: condensed;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  line-height: 0.95;
-  font-size: clamp(2.75rem, 12vw, 5.5rem);
+  margin: 0;
+}
+.bm-h1 {
+  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  line-height: 0.98;
+}
+.bm-h2 {
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+}
+.bm-screen-title {
+  font-size: clamp(1.6rem, 3.4vw, 2.6rem);
   color: var(--bm-ink);
-  text-shadow: 0 0 32px rgba(255, 200, 0, 0.22);
+  text-align: center;
 }
 
-.title-screen__tagline {
-  margin: 0 auto;
-  max-width: 46ch;
-  font-size: 1.05rem;
-  line-height: 1.5;
+.bm-muted {
   color: var(--bm-ink-dim);
 }
 
-.title-screen__status {
-  margin: 0;
+/* =========================================================================
+   Root scene grid: [rail] [stage] [panel], top bar spans, health bar bottom
+   ========================================================================= */
+
+.bm-scene {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--bm-rail-w) 1fr var(--bm-panel-w);
+  grid-template-rows: var(--bm-topbar-h) 1fr auto;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail   stage  panel"
+    "rail   health panel";
+  gap: 0;
+}
+
+.bm-scene--bare {
+  /* Draft / final standings own the whole viewport (no in-round chrome). */
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "stage";
+}
+
+.bm-topbar-slot { grid-area: topbar; }
+.bm-rail-slot { grid-area: rail; }
+.bm-panel-slot { grid-area: panel; }
+.bm-health-slot { grid-area: health; }
+.bm-stage {
+  grid-area: stage;
+  position: relative;
+  overflow: auto;
+  padding: var(--bm-gap);
+}
+.bm-stage--locked {
+  pointer-events: none;
+  opacity: 0.72;
+}
+.bm-readybar {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+}
+.bm-healthbar__fill {
+  width: calc(var(--h, 0) / var(--m, 1) * 100%);
+}
+.bm-rail__fill {
+  width: calc(var(--xp, 0) / var(--th, 1) * 100%);
+}
+
+/* =========================================================================
+   Top bar — round-phase, phase-icon strip, phase name + countdown
+   ========================================================================= */
+
+.bm-topbar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--bm-ground-sunken), transparent);
+}
+.bm-topbar__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 260px;
+  padding: 6px 26px 8px;
+  background: var(--bm-ground-sunken);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+}
+.bm-topbar__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bm-topbar__round {
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+}
+.bm-phasestrip {
+  display: flex;
+  gap: 6px;
+}
+.bm-phasestrip__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  background: var(--bm-panel-2);
+  border: 1px solid var(--bm-border);
+  color: var(--bm-ink-faint);
+}
+.bm-phasestrip__icon--done {
+  color: var(--bm-ground);
+  background: var(--bm-accent);
+  border-color: var(--bm-accent);
+}
+.bm-phasestrip__icon--active {
+  color: var(--bm-accent);
+  border-color: var(--bm-accent);
+}
+.bm-topbar__phase {
+  margin-top: 3px;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--bm-accent);
   text-transform: uppercase;
-  letter-spacing: 0.28em;
+}
+.bm-topbar__phase--waiting { color: var(--bm-ink); }
+
+/* =========================================================================
+   Left rail — four protocol meters + Strengthen counter
+   ========================================================================= */
+
+.bm-rail {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 6px;
+  background: linear-gradient(90deg, var(--bm-ground-sunken), transparent);
+}
+.bm-rail__proto {
+  --c: var(--bm-fortress);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+.bm-rail__proto:hover { background: #ffffff0d; }
+.bm-rail__proto--active {
+  border-left-color: var(--bm-accent);
+  background: #ffffff0f;
+}
+.bm-rail__glyph {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c) 32%, var(--bm-ground));
+  border: 1px solid var(--c);
+  position: relative;
+}
+.bm-rail__badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--bm-ground-sunken);
+  border: 1px solid var(--c);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.bm-rail__meter {
   font-size: 0.72rem;
+  font-weight: 700;
+  font-style: italic;
+}
+.bm-rail__proto--active .bm-rail__meter { color: var(--bm-accent); }
+.bm-rail__track {
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bm-border);
+  overflow: hidden;
+}
+.bm-rail__fill { height: 100%; background: var(--c); }
+.bm-rail__strengthen {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--bm-strengthen);
+  font-weight: 800;
+  font-style: italic;
+}
+.bm-rail__strengthen .bm-rail__glyph {
+  --c: var(--bm-strengthen);
+}
+
+/* =========================================================================
+   Right panel — player list, sorted by health desc
+   ========================================================================= */
+
+.bm-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  background: linear-gradient(270deg, var(--bm-ground-sunken), transparent);
+  overflow: auto;
+}
+.bm-panel__tabs {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-bottom: 2px;
+}
+.bm-panel__tab {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  background: var(--bm-panel-2);
+  border: 1px solid var(--bm-border);
+  border-radius: 4px;
+  color: var(--bm-ink-dim);
+}
+.bm-panel__tab--active { color: var(--bm-accent); border-color: var(--bm-accent); }
+.bm-prow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bm-panel);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+}
+.bm-prow--self { border-color: var(--bm-fortress); background: color-mix(in srgb, var(--bm-fortress) 16%, var(--bm-panel)); }
+.bm-prow--out { opacity: 0.6; }
+.bm-prow__name {
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bm-prow__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--bm-ink-dim);
+}
+.bm-prow__ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  background: var(--bm-ground-sunken);
+  border: 2px solid var(--bm-streak-win);
+}
+.bm-prow__ring--out {
+  border-color: var(--bm-border);
+  color: var(--bm-ink-faint);
+  font-size: 0.6rem;
+  font-style: italic;
+}
+.bm-streak {
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+.bm-streak--win { color: var(--bm-streak-win); }
+.bm-streak--loss { color: var(--bm-streak-loss); }
+.bm-tokens { color: var(--bm-ink); }
+.bm-tokens__sym { color: var(--bm-star-common); }
+
+/* =========================================================================
+   Bottom-centre health bar + bottom-right key hints
+   ========================================================================= */
+
+.bm-healthbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 0 10px;
+}
+.bm-healthbar__track {
+  width: min(46vw, 520px);
+  height: 12px;
+  background: var(--bm-ground-sunken);
+  border: 1px solid var(--bm-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bm-healthbar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--bm-streak-win), #9be6b4);
+}
+.bm-healthbar__num {
+  font-weight: 800;
+  font-style: italic;
+  font-size: 0.95rem;
+}
+.bm-hints {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  display: flex;
+  gap: 14px;
+  font-size: 0.72rem;
+  color: var(--bm-ink-dim);
+  pointer-events: none;
+}
+.bm-hints__key {
+  color: var(--bm-ink);
+  font-weight: 700;
+  border: 1px solid var(--bm-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 4px;
+}
+
+/* =========================================================================
+   Hero token — role shape + 2-letter initials + Strengthen pip
+   ========================================================================= */
+
+.bm-token {
+  --c: var(--bm-fortress);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--bm-token-size, 46px);
+  height: var(--bm-token-size, 46px);
+  color: var(--bm-ink);
+}
+.bm-token__shape { position: absolute; inset: 0; }
+.bm-token__shape path,
+.bm-token__shape polygon,
+.bm-token__shape circle,
+.bm-token__shape rect {
+  fill: color-mix(in srgb, var(--c) 34%, var(--bm-ground-sunken));
+  stroke: var(--c);
+  stroke-width: 6;
+}
+.bm-token__initials {
+  position: relative;
+  font-weight: 800;
+  font-style: italic;
+  font-size: calc(var(--bm-token-size, 46px) * 0.34);
+  letter-spacing: 0.02em;
+}
+.bm-token__pip {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--bm-strengthen);
+  color: var(--bm-ground);
+  font-size: 9px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.bm-token--vanguard { --c: var(--bm-fortress); }
+.bm-token--duelist { --c: var(--bm-onslaught); }
+.bm-token--strategist { --c: var(--bm-reboot); }
+
+/* =========================================================================
+   Generic buttons
+   ========================================================================= */
+
+.bm-btn {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 16px;
+  border-radius: var(--bm-radius);
+  border: 1px solid var(--bm-border);
+  background: var(--bm-panel-2);
+  color: var(--bm-ink);
+  cursor: pointer;
+}
+.bm-btn:hover:not(:disabled) { border-color: var(--bm-accent); }
+.bm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.bm-btn--primary {
+  background: var(--bm-accent);
+  border-color: var(--bm-accent);
+  color: #1a1400;
+}
+.bm-btn:focus-visible,
+.bm-focusable:focus-visible {
+  outline: 2px solid var(--bm-accent);
+  outline-offset: 2px;
+}
+.bm-price { font-style: normal; }
+.bm-price--red { color: var(--bm-danger); }
+
+/* =========================================================================
+   Draft screen
+   ========================================================================= */
+
+.bm-draft {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: clamp(16px, 4vw, 48px);
+  gap: 18px;
+}
+.bm-draft__head { max-width: 60ch; }
+.bm-draft__tagline { color: var(--bm-ink-dim); margin: 8px 0 0; max-width: 52ch; line-height: 1.45; }
+.bm-draft__pool {
+  align-self: center;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+.bm-pool-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  background: var(--bm-panel);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+  cursor: pointer;
+}
+.bm-pool-card--picked { border-color: var(--bm-accent); background: color-mix(in srgb, var(--bm-accent) 14%, var(--bm-panel)); }
+.bm-pool-card--disabled { opacity: 0.4; cursor: not-allowed; }
+.bm-pool-card__name { font-size: 0.72rem; text-align: center; }
+.bm-pool-card__role { font-size: 0.64rem; color: var(--bm-ink-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.bm-draft__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.bm-draft__slots { display: flex; gap: 8px; }
+.bm-slot {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--bm-radius);
+  border: 1px dashed var(--bm-border);
+  display: grid;
+  place-items: center;
+}
+.bm-draft__timer {
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.6rem;
   color: var(--bm-accent);
 }
 
-.title-screen__disclaimer {
-  margin-top: 1rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--bm-border);
-  font-size: 0.72rem;
-  line-height: 1.55;
+/* =========================================================================
+   Module Draw / shop
+   ========================================================================= */
+
+.bm-shop {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bm-shop__tabs {
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+.bm-shop__tab {
+  background: none;
+  border: 0;
   color: var(--bm-ink-dim);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  padding: 6px 2px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.bm-shop__tab--active { color: var(--bm-accent); border-bottom-color: var(--bm-accent); }
+.bm-shop__wallet {
+  position: absolute;
+  right: 0;
+  font-weight: 700;
+}
+.bm-shop__wallet .bm-tokens__sym { color: var(--bm-star-common); }
+.bm-odds {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.bm-odds__star--common { color: var(--bm-star-common); }
+.bm-odds__star--rare { color: var(--bm-star-rare); }
+.bm-odds__star--legendary { color: var(--bm-star-legendary); }
+.bm-shop__cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.bm-card {
+  --c: var(--bm-onslaught);
+  display: flex;
+  flex-direction: column;
+  background: var(--bm-panel);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+  overflow: hidden;
+  min-height: 260px;
+  cursor: pointer;
+}
+.bm-card--vanguard, .bm-card--fortress { --c: var(--bm-fortress); }
+.bm-card--duelist, .bm-card--onslaught { --c: var(--bm-onslaught); }
+.bm-card--strategist, .bm-card--reboot { --c: var(--bm-reboot); }
+.bm-card--equilibrium { --c: var(--bm-equilibrium); }
+.bm-card--empty { background: var(--bm-ground-sunken); border-style: dashed; cursor: default; }
+.bm-card__banner {
+  background: linear-gradient(180deg, var(--c), color-mix(in srgb, var(--c) 55%, #000));
+  padding: 14px 10px 12px;
+  text-align: center;
+  position: relative;
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.bm-card__glyph {
+  width: 30px;
+  height: 30px;
+  transform: rotate(45deg);
+  background: #ffffff26;
+  border: 1px solid #ffffff66;
+  display: grid;
+  place-items: center;
+}
+.bm-card__name {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  line-height: 1.05;
+}
+.bm-card__lock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-top: 28px solid var(--bm-accent);
+  border-left: 28px solid transparent;
+}
+.bm-card__lock::after {
+  content: "\1F512";
+  position: absolute;
+  top: -26px;
+  right: 2px;
+  font-size: 12px;
+}
+.bm-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: linear-gradient(180deg, transparent, #ffffff08);
+}
+.bm-card__effect {
+  font-size: 0.72rem;
+  color: var(--bm-ink-dim);
+  text-align: center;
+  flex: 1;
+}
+.bm-card__stars { text-align: center; letter-spacing: 2px; font-size: 0.9rem; }
+.bm-star { color: var(--bm-border-strong); }
+.bm-star--filled-common { color: var(--bm-star-common); }
+.bm-star--filled-rare { color: var(--bm-star-rare); }
+.bm-star--filled-legendary { color: var(--bm-star-legendary); }
+.bm-star--next { color: var(--bm-ink); text-shadow: 0 0 6px currentColor; }
+.bm-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  padding-top: 4px;
+  border-top: 1px solid var(--bm-border);
+}
+.bm-shop__actions { display: flex; gap: 12px; justify-content: center; }
+.bm-shop__footnote {
+  text-align: center;
+  font-style: italic;
+  font-size: 0.74rem;
+  color: var(--bm-ink-dim);
+}
+
+/* =========================================================================
+   Change Hero tab
+   ========================================================================= */
+
+.bm-changehero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 720px;
+  margin: 12px auto 0;
+}
+.bm-rolecard {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bm-change-hero) 40%, var(--bm-panel)), var(--bm-panel));
+  border: 1px solid var(--bm-change-hero);
+  border-radius: var(--bm-radius);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.bm-rolecard__title { font-weight: 800; font-style: italic; text-transform: uppercase; }
+.bm-rolecard__body { font-size: 0.76rem; color: var(--bm-ink-dim); flex: 1; }
+
+/* =========================================================================
+   Swap-out
+   ========================================================================= */
+
+.bm-swap {
+  max-width: 940px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bm-swap__sub { text-align: center; font-style: italic; font-size: 0.76rem; color: var(--bm-accent); letter-spacing: 0.06em; }
+.bm-swap__rowlabel {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--bm-ink-dim);
+}
+.bm-swap__row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 10px;
+  border-radius: var(--bm-radius);
+}
+.bm-swap__row--reserve { background: color-mix(in srgb, #ffffff 6%, transparent); }
+.bm-swap__row--active { background: color-mix(in srgb, var(--bm-fortress) 12%, transparent); }
+.bm-swap__arrow { text-align: center; font-size: 1.4rem; color: var(--bm-ink-dim); }
+.bm-swap__pick {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: var(--bm-radius);
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.bm-swap__pick--sel { border-color: var(--bm-accent); }
+.bm-swap__pick-name { font-size: 0.68rem; }
+.bm-swap__footnote { text-align: center; font-style: italic; font-size: 0.72rem; color: var(--bm-ink-dim); }
+.bm-swap__actions { display: flex; gap: 12px; justify-content: center; }
+
+/* =========================================================================
+   Select Position — the 6×4 board
+   ========================================================================= */
+
+.bm-deploy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.bm-deploy__title { color: var(--bm-accent); }
+.bm-board {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 6px;
+  width: min(680px, 92vw);
+  aspect-ratio: 6 / 4;
+  padding: 10px;
+  background: var(--bm-ground-sunken);
+  border: 1px solid var(--bm-border);
+  border-radius: 8px;
+}
+.bm-cell {
+  border: 1px solid var(--bm-border);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  background: #ffffff05;
+}
+.bm-cell--front { border-color: color-mix(in srgb, var(--bm-onslaught) 45%, var(--bm-border)); }
+.bm-cell--drop { outline: 2px dashed var(--bm-accent); outline-offset: -2px; }
+.bm-cell--sel { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
+.bm-cell__hero { cursor: grab; }
+.bm-deploy__hint { font-size: 0.74rem; color: var(--bm-ink-dim); }
+.bm-deploy__actions { display: flex; gap: 12px; }
+
+/* =========================================================================
+   Reward
+   ========================================================================= */
+
+.bm-reward { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.bm-reward__cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; }
+.bm-strcard {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bm-strengthen) 55%, #241a06), #241a06);
+  border: 1px solid var(--bm-strengthen);
+  border-radius: var(--bm-radius);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 220px;
+  cursor: pointer;
+}
+.bm-strcard--sel { outline: 2px solid var(--bm-ink); }
+.bm-strcard__name { font-weight: 800; font-style: italic; text-transform: uppercase; min-height: 1.2em; text-align: center; }
+.bm-strcard__effect { font-size: 0.74rem; color: #f4e6c8; text-align: center; flex: 1; }
+.bm-keybind {
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.bm-reward__instruction { display: flex; align-items: center; gap: 8px; font-style: italic; }
+.bm-reward__bang { color: var(--bm-danger); font-weight: 800; }
+
+/* =========================================================================
+   Scoreboard
+   ========================================================================= */
+
+.bm-scoreboard {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+.bm-sb-grid {
+  display: grid;
+  grid-template-columns: 60px 1fr 260px 260px;
+}
+.bm-sb-grid__head {
+  display: contents;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--bm-ink-dim);
+}
+.bm-sb-grid__head > div { padding: 8px 10px; border-bottom: 1px solid var(--bm-border); }
+.bm-sb-row {
+  display: contents;
+}
+.bm-sb-row > div {
+  padding: 8px 10px;
+  background: var(--bm-panel);
+  border-bottom: 1px solid var(--bm-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bm-sb-row--self > div { background: color-mix(in srgb, var(--bm-fortress) 14%, var(--bm-panel)); }
+.bm-sb-row--dim > div { opacity: 0.55; }
+.bm-sb-row__rank { font-weight: 800; font-style: italic; }
+.bm-sb-row__rank--1 { color: var(--bm-accent); }
+.bm-sb-deploy { display: flex; gap: 3px; }
+.bm-sb-protos { display: flex; gap: 8px; }
+.bm-sb-proto { display: flex; flex-direction: column; align-items: center; font-size: 0.66rem; }
+.bm-sb-proto__dot { width: 12px; height: 12px; border-radius: 3px; }
+.bm-sb-proto--fortress .bm-sb-proto__dot { background: var(--bm-fortress); }
+.bm-sb-proto--onslaught .bm-sb-proto__dot { background: var(--bm-onslaught); }
+.bm-sb-proto--reboot .bm-sb-proto__dot { background: var(--bm-reboot); }
+.bm-sb-proto--equilibrium .bm-sb-proto__dot { background: var(--bm-equilibrium); }
+.bm-sb-proto--strengthen .bm-sb-proto__dot { background: var(--bm-strengthen); border-radius: 50%; }
+.bm-sb-divider {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--bm-accent), transparent);
+}
+
+/* =========================================================================
+   Protocol info pane (left-rail click)
+   ========================================================================= */
+
+.bm-infopane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(340px, 84vw);
+  background: var(--bm-ground-sunken);
+  border-right: 1px solid var(--bm-border);
+  padding: 16px 16px 24px;
+  overflow: auto;
+  z-index: 20;
+}
+.bm-infopane__title { --c: var(--bm-fortress); font-style: italic; font-weight: 800; color: var(--c); }
+.bm-infopane--fortress { --c: var(--bm-fortress); }
+.bm-infopane--onslaught { --c: var(--bm-onslaught); }
+.bm-infopane--reboot { --c: var(--bm-reboot); }
+.bm-infopane--equilibrium { --c: var(--bm-equilibrium); }
+.bm-infopane__xp { font-weight: 700; font-style: italic; margin: 4px 0 12px; }
+.bm-infopane__tier { font-size: 0.8rem; margin: 6px 0; color: var(--bm-ink); }
+.bm-infopane__tier--earned { color: var(--bm-cyan); }
+.bm-infopane__legend { display: flex; gap: 10px; margin: 12px 0; font-size: 0.72rem; font-weight: 700; }
+.bm-infopane__legend span:nth-child(1) { color: var(--bm-star-common); }
+.bm-infopane__legend span:nth-child(2) { color: var(--bm-star-rare); }
+.bm-infopane__legend span:nth-child(3) { color: var(--bm-star-legendary); }
+.bm-infopane__owned-h { font-weight: 700; margin: 14px 0 8px; border-top: 1px solid var(--bm-border); padding-top: 10px; }
+.bm-owned {
+  margin-bottom: 10px;
+}
+.bm-owned__name { font-style: italic; font-weight: 700; }
+.bm-owned__name--common { color: var(--bm-star-common); }
+.bm-owned__name--rare { color: var(--bm-star-rare); }
+.bm-owned__name--legendary { color: var(--bm-star-legendary); }
+.bm-owned__effect { font-size: 0.72rem; color: var(--bm-ink-dim); }
+.bm-infopane__close { position: absolute; top: 8px; right: 8px; }
+
+/* =========================================================================
+   Battle placeholder (M9 builds the real renderer + HUD)
+   ========================================================================= */
+
+.bm-battle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 10px;
+}
+.bm-battle__names {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  font-style: italic;
+}
+.bm-battle__note { color: var(--bm-ink-dim); font-size: 0.8rem; max-width: 40ch; }
+
+/* =========================================================================
+   Final standings
+   ========================================================================= */
+
+.bm-standings {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+}
+.bm-standings__list { width: min(520px, 100%); display: flex; flex-direction: column; gap: 6px; }
+.bm-standings__row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bm-panel);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+}
+.bm-standings__row--1 { border-color: var(--bm-accent); }
+.bm-standings__rank { font-weight: 800; font-style: italic; font-size: 1.2rem; }
+.bm-standings__disclaimer { margin-top: 18px; max-width: 60ch; text-align: center; font-size: 0.68rem; color: var(--bm-ink-faint); }
+
+/* =========================================================================
+   Motion
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================================
+   Responsive — 1280×720 baseline, up to 1920×1080, legible to 1024
+   ========================================================================= */
+
+@media (max-width: 1440px) {
+  :root { --bm-panel-w: 210px; --bm-rail-w: 68px; }
+  .bm-shop__cards { gap: 8px; }
+}
+@media (max-width: 1180px) {
+  :root { --bm-panel-w: 188px; --bm-topbar-h: 66px; }
+  body { font-size: 14px; }
+  .bm-sb-grid { grid-template-columns: 48px 1fr 190px 190px; }
+}
+@media (max-width: 1024px) {
+  :root { --bm-rail-w: 60px; --bm-panel-w: 168px; }
+  .bm-draft__pool { grid-template-columns: repeat(6, 1fr); }
+  .bm-changehero { grid-template-columns: 1fr; max-width: 360px; }
+  .bm-card { min-height: 220px; }
 }

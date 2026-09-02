@@ -15,6 +15,7 @@
  */
 
 import {
+  CHANGE_HERO_COST,
   HERO_POOL_PER_ROLE,
   LINEUP_SIZE,
   PHASE_COUNT,
@@ -58,7 +59,9 @@ import {
   openShop,
   refreshShop,
   sellModule,
+  spendHeroSwap,
   spendShopRefresh,
+  swapHeroAndConvertStrengthen,
   unlockShop,
   zeroProtocolXp,
 } from './modules';
@@ -578,6 +581,27 @@ function applyHumanShopActions(
       ) {
         shop = refreshShop(shop, accountLevels(acc), acc.owned, rng.stream(`shop:${p.id}`, round));
       }
+    } else if (a.type === 'swapHero') {
+      // Change-Hero swap-out (M8). Legal only if `outgoing` is active, `incoming`
+      // is not, and the swap cost is covered; otherwise a no-op (the human seat
+      // is free to fumble). `swapHeroAndConvertStrengthen` returns the outgoing
+      // hero's Strengthen Modules to `selectable` — never auto-assigned.
+      if (
+        p.lineup.includes(a.outgoing) &&
+        !p.lineup.includes(a.incoming) &&
+        acc.tokens >= CHANGE_HERO_COST &&
+        spendHeroSwap(acc, CHANGE_HERO_COST)
+      ) {
+        const res = swapHeroAndConvertStrengthen(
+          { lineup: p.lineup.slice(), reserve: p.reserve.slice() },
+          p.strengthen,
+          a.incoming,
+          a.outgoing,
+        );
+        p.lineup = [...res.lineup.lineup];
+        p.reserve = [...res.lineup.reserve];
+        p.strengthen = res.strengthen;
+      }
     } else {
       shop = shop.locked ? unlockShop(shop) : lockShop(shop);
     }
@@ -608,7 +632,8 @@ type HumanShopAction =
   | { readonly type: 'buyModule'; readonly slot: number }
   | { readonly type: 'sellModule'; readonly moduleId: string }
   | { readonly type: 'refreshShop' }
-  | { readonly type: 'lockShop' };
+  | { readonly type: 'lockShop' }
+  | { readonly type: 'swapHero'; readonly incoming: string; readonly outgoing: string };
 
 interface PhaseInput {
   /** true = player 0 confirmed; false = timed out / ran out of actions. */
@@ -675,6 +700,10 @@ function consumeUntilPhaseEnd(actions: readonly Action[], cur: Cursor): PhaseInp
     }
     if (act.type === 'lockShop') {
       shopActions.push({ type: 'lockShop' });
+      continue;
+    }
+    if (act.type === 'swapHero') {
+      shopActions.push({ type: 'swapHero', incoming: act.incoming, outgoing: act.outgoing });
       continue;
     }
     if (act.type === 'deploy') {
