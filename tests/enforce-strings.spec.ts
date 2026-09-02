@@ -5,20 +5,21 @@ import { describe, expect, it } from 'vitest';
 import * as S from '../src/data/strings';
 
 /*
- * ENFORCEMENT (plan, M8): "every visible string comes from strings.ts". This
- * scans every `src/ui/**\/*.ts`, strips comments, and flags a multi-word quoted
- * literal (two or more letter-words separated by whitespace) that is NOT:
+ * ENFORCEMENT (plan, M8; M9 extends the scan to `src/render/**`): "every visible
+ * string comes from strings.ts". This scans every `src/ui/**\/*.ts` and
+ * `src/render/**\/*.ts`, strips comments, and flags a multi-word quoted literal
+ * (two or more letter-words separated by whitespace) that is NOT:
  *   - on an `import` / `export … from` line,
  *   - a value already exported from `src/data/strings`,
  *   - a lowercase kebab class list (`bm-card bm-card--vanguard`),
  *   - a CSS `calc(...)` fragment,
  *   - on the small documented allowlist below.
  *
- * If a screen needs a string that is missing, it was ADDED to strings.ts (see
- * the M8 report), never allowlisted.
+ * If a screen / the renderer needs a string that is missing, it was ADDED to
+ * strings.ts (see the M8 / M9 report), never allowlisted.
  */
 
-const UI_DIR = join(process.cwd(), 'src', 'ui');
+const SCAN_DIRS = [join(process.cwd(), 'src', 'ui'), join(process.cwd(), 'src', 'render')];
 
 const STRING_VALUES = new Set(
   Object.values(S)
@@ -68,11 +69,12 @@ function offenders(code: string): { line: number; value: string }[] {
   return out;
 }
 
-describe('enforcement — every visible string in src/ui comes from strings.ts', () => {
-  const files = tsFiles(UI_DIR);
+describe('enforcement — every visible string in src/ui + src/render comes from strings.ts', () => {
+  const files = SCAN_DIRS.flatMap(tsFiles);
 
-  it('finds ui source files to scan', () => {
+  it('finds ui + render source files to scan', () => {
     expect(files.length).toBeGreaterThan(15);
+    expect(files.some((f) => f.replace(/\\/g, '/').includes('/src/render/'))).toBe(true);
   });
 
   it('the matcher has teeth (catches orphan prose, ignores class lists / strings.ts values)', () => {

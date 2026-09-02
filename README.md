@@ -24,7 +24,62 @@ launch date).
 
 ## Status
 
-Milestone **M8** — the UI shell, chrome, and menu screens.
+Milestone **M9** — the Canvas2D battle renderer and the battle HUD.
+
+The renderer is split the same way the UI is, so it is testable without a real
+Canvas2D context (`jsdom` / `happy-dom` have none):
+
+- **Frame builder** (`src/render/frame.ts`, pure) — `(deep-readonly snapshot,
+  interpolation alpha, HUD state) → draw-command list`: token positions, health-
+  bar segment counts, ult-charge fills, damage numbers, target lines, the drone,
+  the kill feed, the names, the `LSHIFT` / `E` buttons, the hint bar, the Speed
+  Up banner. No `ctx`, no DOM. Tests assert on the command list.
+- **Executor** (`src/render/executor.ts`, thin) — walks the list issuing
+  Canvas2D calls, applies `devicePixelRatio`, batches by style, caches resolved
+  colour tokens + text metrics + parsed shape paths, and pre-renders the static
+  arena to an offscreen canvas. No `shadowBlur`, no `filter`, no frame-loop
+  allocation (pooled `CmdList`).
+
+Measured **build + executor ≈ 0.09 ms/frame** with 12 units plus damage numbers,
+kill feed, beam and the Speed Up banner — far inside the 16.6 ms / 60 fps budget.
+`?debug` in the URL hash shows a live frame-timing readout.
+
+**The sim runs at exactly 30 Hz integer ticks; the renderer interpolates.**
+`src/render/loop.ts` is an accumulator loop with the three failure modes handled
+explicitly — the per-frame delta is clamped, a runaway backlog past the catch-up
+cap is *dropped* rather than chased (the spiral of death), and nothing the
+renderer computes ever reaches sim state. Tick count is a function of elapsed sim
+time alone: `tests/render.spec.ts` drives the same elapsed time as 30 / 60 /
+144 fps synthetic deltas and asserts identical tick counts *and* byte-identical
+sim state, plus a 5-second frame-delta clamp and a full frame built against a
+deep-frozen snapshot.
+
+`src/sim/combat.ts` gained a steppable `BattleController` (identical tick order
+and RNG draws to `simulateBattle`, which is now a thin wrapper over it) and a
+plain per-tick `sampleBattleFrame` projection. The kill feed consumes M5's
+append-only `KillEvent[]` **by cursor**; the floating damage numbers consume M5's
+per-hit `damageLog` the same way (renderer-local ephemeral state — never in sim
+state). Galacta Bots draw as **distinct monster tokens**, resolved — with heroes
+and the drone — through a single `resolveUnitArt` / `resolveDroneArt` in
+`src/ui/heroArt.ts`, keeping the one-file image drop-in property.
+
+**Live keyboard / mouse becomes M6's deterministic per-tick drone stream here.**
+Input is latched by `GameApp` and read once per sim tick (not per frame),
+quantized at capture (`encodeDroneMove`), and banked as one `driveDrone` action
+per battle so `runMatch` resolves that round with the flown drone — a captured
+match replays byte-identically. `LALT` toggles pointer-drives-drone ⇄
+pointer-free-for-UI (the 2D adaptation of the original's mouse-look release);
+`B` opens the module menu over the still-ticking battle with the "effects apply
+next round" notice, proven end to end.
+
+The **camera is a deliberate deviation**: the screenshots show a 3D third-person
+chase view, our arena is a 2D canvas, so the whole arena renders top-down with
+the drone as one more token — the 6×4 placement is the point of the mode. Both
+this and the `LALT` adaptation are recorded in `docs/QA.md` §6.
+
+---
+
+### M8 — the UI shell, chrome, and menu screens
 
 The UI is split in two, so "no game rule lives in a component" is structural
 rather than a matter of discipline:
@@ -56,7 +111,10 @@ owned-level star row, red-when-unaffordable price, empty-slot-after-purchase,
 offers), **Swap-out** (Reserve above Active, confirm gated on one of each),
 **Select Position** (6×4 own-half grid, drag-and-drop *and* keyboard placement,
 swap-on-collision so it can never double-occupy / exceed six / cross off-grid),
-**Battle** (M8 shell only — the Canvas2D renderer is M9), **Reward** (renders
+**Battle** (the M9 Canvas2D renderer — top-down arena, segmented health bars,
+ult-charge bars, damage numbers, the drone, monster tokens for Galacta Bots, the
+cursor-fed kill feed, `LSHIFT` / `E` buttons that grey exactly when the sim marks
+the ability spent, and the Speed Up Protocol announcement), **Reward** (renders
 `strengthen.json`'s M1 skeleton verbatim — nothing invented; lights up in M10),
 **Scoreboard** (fully public, six lineups, four protocol levels, Strengthen
 counts, top-3 divider), **Final Standings**, and the left-rail **protocol info
@@ -67,23 +125,26 @@ a single `resolveHeroArt` so a later image drop-in touches one file.
 
 **Colour tokens are defined once**, in `src/ui/theme.css`; `tests/theme.spec.ts`
 reads that file and asserts every hex from the plan's table. Two enforcement
-greps back the architecture: **no arithmetic on tokens / health / XP outside
-`src/sim/`** (`tests/enforce-no-arith.spec.ts` — bar fills use CSS `calc()` over
-custom properties, so the allowlist is *empty*) and **every visible string comes
-from `strings.ts`** (`tests/enforce-strings.spec.ts` — one allowlist entry, the
-`text/plain` drag-and-drop MIME type). `docs/QA.md` is the side-by-side
-screenshot checklist, one row per screen, with the responsive / reduced-motion
-record.
+greps back the architecture, now scanning **`src/ui/**` *and* `src/render/**`**:
+**no arithmetic on tokens / health / XP outside `src/sim/`**
+(`tests/enforce-no-arith.spec.ts` — health-bar segment counts / ult fills / the
+position tween come from `src/sim/selectors.ts`, so the allowlist is *empty*) and
+**every visible string comes from `strings.ts`** (`tests/enforce-strings.spec.ts`
+— one allowlist entry, the `text/plain` drag-and-drop MIME type). `docs/QA.md` is
+the side-by-side screenshot checklist, one row per screen, with the responsive /
+reduced-motion record and the M9 camera / `LALT` deviations.
 
-The one sim-facing addition is `swapHero` in the `Action` union (wired through
-the existing M4 swap primitives, no `MatchState` shape change) and the pure
-`src/sim/selectors.ts` (`leftRailMeter`, health-descending / scoreboard
-ordering, the info-pane tier rows, and the Change-Hero / Reward offer sets the
-sim computes but does not persist). `tsconfig` gained `"DOM"` in `lib` — additive
-type declarations, not a strictness change; `src/sim` / `src/ai` headlessness is
-still enforced by the ESLint override and the grep. **The determinism and golden
-replay hashes are byte-identical to M7** — no existing action list emits the new
-members.
+The sim-facing additions stay small and additive: `swapHero` and `driveDrone` in
+the `Action` union (`driveDrone` carries the human's recorded per-round drone
+stream — round-addressed, folded into `runMatch` up front), a steppable
+`BattleController` + `sampleBattleFrame` in `combat.ts`, a `humanBattleContext`
+context-rebuilder in `match.ts`, mid-battle `buyModule` applied after the round's
+combat, and the pure `src/sim/selectors.ts` helpers (`leftRailMeter`,
+health-descending / scoreboard ordering, the info-pane tier rows, the
+Change-Hero / Reward offer sets, and now `healthBarModel` / `ultChargeFraction` /
+`lerp`). No `MatchState` shape change. **The determinism and golden replay hashes
+are byte-identical to M7 / M8** — no existing action list emits the new members,
+and the damage-number stream is M5's existing `trace` output consumed read-only.
 
 Delivered so far:
 
@@ -154,14 +215,35 @@ Delivered so far:
   action; drag-and-drop legality over 5 000 random drops), `tests/ui-render.spec.ts`
   (happy-dom renderer smoke + a full-round `GameApp` walk), and the two
   enforcement greps. `docs/QA.md` pairs each screen with its screenshot.
+- **M9** — the battle renderer: `src/render/frame.ts` (the pure frame builder +
+  `CmdList` pool), `src/render/executor.ts` (the thin Canvas2D executor),
+  `src/render/loop.ts` (the fixed-timestep accumulator), `src/render/arena.ts`
+  (the offscreen static arena), `src/render/killFeed.ts` +
+  `src/render/damageNumbers.ts` (cursor consumers of M5's event streams),
+  `src/render/readonly.ts` (`DeepReadonly` + `deepFreeze`), and
+  `src/render/battleRenderer.ts` (the orchestrator — `<canvas>`, dpr, the loop,
+  the stepped `BattleController`, live drone-input capture). In `src/sim`:
+  `BattleController` / `sampleBattleFrame` in `combat.ts`, `humanBattleContext`
+  in `match.ts`, `driveDrone` in the `Action` union, and `healthBarModel` /
+  `ultChargeFraction` / `lerp` in `selectors.ts`; `resolveUnitArt` /
+  `resolveDroneArt` in `src/ui/heroArt.ts`. `tests/render.spec.ts` covers the
+  deep-frozen-snapshot render, kill-feed ordering / once-only / cap /
+  reduced-motion, tick-rate-independent interpolation at 30 / 60 / 144 fps, the
+  spiral-of-death clamp, the ability button greying on the exact consume tick,
+  the frame-builder layout vs the screenshots, the monster tokens, the measured
+  frame timing, the mid-battle purchase flagged next-round end to end, and the
+  `driveDrone` round-trip determinism. The two enforcement greps now also scan
+  `src/render/**`. `docs/QA.md` §6 is the battle-HUD checklist against both
+  battle screenshots with the camera / `LALT` deviations recorded.
 
 `src/sim/` and `src/ai/` are pure and headless — no DOM, no wall clock, no
 `Math.random`, no transcendental math (`Math.sin` / `cos` / `pow` / `hypot` /
 `**` — direction is normalised vector math, sqrt only), no `ui/` / `render/`
-imports — enforced by an ESLint override *and* a grep test. `src/ui/` inverts
-the dependency (it reads `src/sim`, never the reverse) and its own greps keep
-game rules out of the components: no arithmetic on tokens / health / XP, and
-every visible string sourced from `src/data/strings.ts`.
+imports — enforced by an ESLint override *and* a grep test. `src/ui/` and
+`src/render/` invert the dependency (they read `src/sim`, never the reverse):
+`src/render/` owns the wall clock and Canvas2D, and both layers are held to no
+arithmetic on tokens / health / XP and every visible string sourced from
+`src/data/strings.ts`.
 
 See [`PLANS/ultron-battle-matrix-protocol.md`](PLANS/ultron-battle-matrix-protocol.md)
 for the full roadmap.

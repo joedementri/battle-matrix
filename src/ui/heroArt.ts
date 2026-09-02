@@ -14,6 +14,8 @@ import heroesJson from '../data/heroes.json';
 import { ROLE_DISPLAY_NAME } from '../data/strings';
 import type { DisplayRole } from '../data/strings';
 import type { Role } from '../data/types';
+import { GALACTA_ARCHETYPE_IDS } from '../sim/galacta';
+import { DRONE_COLOURS } from '../data/constants';
 
 export type RoleShape = 'shield' | 'blade' | 'cross';
 
@@ -91,4 +93,97 @@ export function resolveHeroArt(heroId: string): HeroArt {
     roleClass: `bm-token--${hero.role}`,
     initials: initialsOf(hero.name),
   };
+}
+
+// ---------------------------------------------------------------------------
+// M9 — one resolver for every kind of thing the battle renderer draws:
+// heroes, Galacta Bots (visually distinct MONSTER tokens, not heroes), and the
+// Ultron Drone. Same one-file drop-in property: a real-image pack swaps the
+// `shape` / `spritePath` here and nothing downstream changes.
+// ---------------------------------------------------------------------------
+
+export type UnitShape = RoleShape | 'monster';
+export type UnitCategory = 'hero' | 'bot';
+
+export interface UnitArt {
+  readonly id: string;
+  readonly name: string;
+  readonly category: UnitCategory;
+  readonly role: Role;
+  readonly shape: UnitShape;
+  /** CSS custom property the executor resolves to a concrete colour. */
+  readonly colorVar: string;
+  /** SVG path data (viewBox 0 0 100 100), single-letter commands + digits only. */
+  readonly shapePath: string;
+  readonly initials: string;
+}
+
+/** A blobby, asymmetric monster silhouette — deliberately un-heroic. */
+const MONSTER_PATH =
+  'M50 8 L64 20 L82 16 L78 34 L92 46 L74 56 L80 76 L58 68 L44 90 L36 66 L14 70 L24 50 L8 36 L28 30 L26 10 L44 22 Z';
+
+const GALACTA_META: Readonly<Record<string, { readonly name: string; readonly role: Role }>> = {
+  'galacta-swarm': { name: 'Swarm', role: 'duelist' },
+  'galacta-brute': { name: 'Brute', role: 'vanguard' },
+  'galacta-caster': { name: 'Caster', role: 'strategist' },
+};
+
+export function isGalactaId(id: string): boolean {
+  return GALACTA_ARCHETYPE_IDS.includes(id);
+}
+
+/** Resolve battle art for a hero id OR a Galacta archetype id. */
+export function resolveUnitArt(id: string): UnitArt {
+  if (isGalactaId(id)) {
+    const meta = GALACTA_META[id] ?? { name: 'Monster', role: 'duelist' as Role };
+    return {
+      id,
+      name: meta.name,
+      category: 'bot',
+      role: meta.role,
+      shape: 'monster',
+      colorVar: '--bm-galacta',
+      shapePath: MONSTER_PATH,
+      initials: meta.name.slice(0, 2).toUpperCase(),
+    };
+  }
+  const hero = resolveHeroArt(id);
+  return {
+    id,
+    name: hero.name,
+    category: 'hero',
+    role: hero.role,
+    shape: hero.shape,
+    colorVar: hero.colorVar,
+    shapePath: SHAPE_PATH[hero.shape],
+    initials: hero.initials,
+  };
+}
+
+export type DroneColourName = (typeof DRONE_COLOURS)[number];
+
+export interface DroneArt {
+  readonly colour: DroneColourName;
+  /** Concrete hex — drone colours are literal, not theme tokens. */
+  readonly colorHex: string;
+  /** SVG path data (viewBox 0 0 100 100) — a forward chevron, clearly not a unit token. */
+  readonly shapePath: string;
+}
+
+const DRONE_HEX: Readonly<Record<DroneColourName, string>> = {
+  Blue: '#4aa8ff',
+  Yellow: '#ffd23f',
+  White: '#eef1f8',
+  Default: '#b8c0d8',
+  Red: '#ff5a52',
+  Green: '#3fb964',
+};
+
+const DRONE_PATH = 'M50 6 L86 40 L68 40 L68 94 L32 94 L32 40 L14 40 Z';
+
+export function resolveDroneArt(colour: string): DroneArt {
+  const name = (DRONE_COLOURS as readonly string[]).includes(colour)
+    ? (colour as DroneColourName)
+    : 'Default';
+  return { colour: name, colorHex: DRONE_HEX[name], shapePath: DRONE_PATH };
 }

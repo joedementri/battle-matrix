@@ -19,17 +19,19 @@ import { PHASE_TIMERS_SECONDS, ROUND_CAP } from '../data/authored';
 import type { Protocol, Role } from '../data/types';
 import type { DeployCell } from '../sim/board';
 import { createCombatResolver } from '../sim/combat';
-import { runMatch } from '../sim/match';
+import { humanBattleContext, runMatch } from '../sim/match';
 import { practiceRewardCount } from '../sim/practice';
 import { changeHeroOfferIds, humanRewardOffers } from '../sim/selectors';
 import type { Action, MatchResult, MatchState, PhaseKind } from '../sim/types';
+import { BattleRenderer } from '../render/battleRenderer';
+import type { RawDroneInput } from '../render/battleRenderer';
+import { battleNames, renderBattleHost, renderBattleShopOverlay } from './screens/battle';
 
 import { buildScene } from './chrome';
 import { h, replaceChildren } from './dom';
 import { clock } from './format';
 import { buildAction } from './intents';
 import type { UiCallbacks } from './intents';
-import { renderBattle } from './screens/battle';
 import { renderDeploy } from './screens/deploy';
 import { renderDraft } from './screens/draft';
 import { renderInfoPane } from './screens/infoPane';
@@ -91,6 +93,18 @@ export class GameApp {
   private scoreboardOpen = false;
   private infoPaneProtocol: Protocol | null = null;
 
+  // M9 — battle renderer + live drone-input latch
+  private battle: BattleRenderer | null = null;
+  private battleShopOpen = false;
+  private droneRecordingCommitted = false;
+  private droneControlMode = true;
+  private readonly keysDown = new Set<string>();
+  private pointerVec: { x: number; y: number } | null = null;
+  private pointerBeam = false;
+  private altPrev = false;
+  private clickDamage = false;
+  private clickHeal = false;
+
   // wall clock
   private phaseSeconds: number = PHASE_TIMERS_SECONDS.draft;
   private phaseStartMs = 0;
@@ -110,6 +124,7 @@ export class GameApp {
   start(): void {
     this.phaseStartMs = performance.now();
     document.addEventListener('keydown', this.onGlobalKey);
+    document.addEventListener('keyup', this.onGlobalKeyUp);
     this.render();
     requestAnimationFrame(this.tick);
   }
@@ -187,18 +202,56 @@ export class GameApp {
     this.rewardRefreshed = false;
     this.scoreboardOpen = false;
     this.infoPaneProtocol = null;
+    this.battleShopOpen = false;
+    this.droneRecordingCommitted = false;
+    this.droneControlMode = true;
+    this.keysDown.clear();
+    this.pointerBeam = false;
     this.phaseSeconds = PHASE_TIMERS_SECONDS[TIMER_KEY[this.state().phaseKind]];
     this.phaseStartMs = performance.now();
     this.othersReadyAt = Number.POSITIVE_INFINITY;
   }
 
+  private toggleBattleShop(): void {
+    this.battleShopOpen = !this.battleShopOpen;
+    this.render();
+  }
+
+  private closeBattleShop(): void {
+    this.battleShopOpen = false;
+    this.render();
+  }
+
   private advancePhase(): void {
     if (this.state().status === 'complete') return;
+    // M9 — the Battle Phase is ending: bank the flown drone stream as a
+    // `driveDrone` action so `runMatch` resolves this round with what the
+    // player actually flew, then tear down the renderer.
+    this.commitDroneRecording();
+    this.disposeBattle();
     this.appendTerminator();
     this.phaseCursor += 1;
     this.recompute();
     this.resetPhaseLocal();
     this.render();
+  }
+
+  /** Push this round's recorded drone-input stream exactly once. */
+  private commitDroneRecording(): void {
+    if (this.battle === null || this.droneRecordingCommitted) return;
+    this.droneRecordingCommitted = true;
+    this.actions.push({
+      type: 'driveDrone',
+      round: this.state().round,
+      input: this.battle.recordedInput,
+    });
+  }
+
+  private disposeBattle(): void {
+    if (this.battle === null) return;
+    this.battle.dispose();
+    this.battle = null;
+    this.battleShopOpen = false;
   }
 
   /** In-round "READY" — confirm early and show "Waiting for Others" while the timer runs. */
@@ -247,17 +300,95 @@ export class GameApp {
   private stampTimers(remaining: number): void {
     const text = clock(remaining);
     for (const el of this.host.querySelectorAll('[data-bm-timer]')) el.textContent = text;
+    this.stampDebug();
+  }
+
+  /** `?debug` (URL hash) — live battle frame-timing readout in the corner. */
+  private stampDebug(): void {
+    if (typeof window === 'undefined' || !/(^|[#&?])debug(=1)?(&|$)/.test(window.location.hash)) {
+      return;
+    }
+    let el = this.host.querySelector('[data-bm-debug]') as HTMLElement | null;
+    if (this.battle === null) {
+      el?.remove();
+      return;
+    }
+    if (el === null) {
+      el = document.createElement('div');
+      el.setAttribute('data-bm-debug', 'true');
+      this.host.appendChild(el);
+    }
+    const s = this.battle.stats();
+    el.textContent =
+      `tick ${this.battle.controllerRef.tick}  ticks ${s.ticks}  frames ${s.frames}\n` +
+      `frame ${s.avgFrameMs.toFixed(2)}ms (build ${s.avgBuildMs.toFixed(2)} draw ${s.avgDrawMs.toFixed(2)})  worst ${s.worstFrameMs.toFixed(1)}ms`;
   }
 
   private readonly onGlobalKey = (event: KeyboardEvent): void => {
     if (event.key === 'Tab') {
       event.preventDefault();
       this.cb.toggleScoreboard();
-    } else if (event.key === 'Escape') {
-      if (this.infoPaneProtocol) this.cb.closeInfoPane();
+      return;
+    }
+    if (event.key === 'Escape') {
+      if (this.battleShopOpen) this.closeBattleShop();
+      else if (this.infoPaneProtocol) this.cb.closeInfoPane();
       else if (this.scoreboardOpen) this.cb.toggleScoreboard();
       else if (this.swap) this.cb.cancelSwap();
+      return;
     }
+    // --- M9 battle controls (only while the Battle Phase is showing) ---
+    if (this.state().phaseKind !== 'battle') return;
+    const k = event.key.toLowerCase();
+    if (k === 'b') {
+      this.toggleBattleShop();
+      return;
+    }
+    if (k === 'alt') {
+      if (!this.altPrev) this.droneControlMode = !this.droneControlMode;
+      this.altPrev = true;
+      event.preventDefault();
+      return;
+    }
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', 'e'].includes(k)) {
+      this.keysDown.add(k);
+    }
+  };
+
+  private readonly onGlobalKeyUp = (event: KeyboardEvent): void => {
+    const k = event.key.toLowerCase();
+    if (k === 'alt') this.altPrev = false;
+    this.keysDown.delete(k);
+  };
+
+  /** Latch of raw drone input — read once per sim tick by the battle renderer. */
+  private readonly sampleInput = (): RawDroneInput => {
+    let dx = 0;
+    let dy = 0;
+    if (this.keysDown.has('a') || this.keysDown.has('arrowleft')) dx -= 1;
+    if (this.keysDown.has('d') || this.keysDown.has('arrowright')) dx += 1;
+    if (this.keysDown.has('w') || this.keysDown.has('arrowup')) dy -= 1;
+    if (this.keysDown.has('s') || this.keysDown.has('arrowdown')) dy += 1;
+    if (dx === 0 && dy === 0 && this.droneControlMode && this.pointerVec) {
+      dx = this.pointerVec.x;
+      dy = this.pointerVec.y;
+    } else if (dx !== 0 || dy !== 0) {
+      const m = Math.sqrt(dx * dx + dy * dy);
+      dx /= m;
+      dy /= m;
+    }
+    const pressDamage = this.keysDown.has('shift') || this.clickDamage;
+    const pressHeal = this.keysDown.has('e') || this.clickHeal;
+    this.clickDamage = false;
+    this.clickHeal = false;
+    return {
+      dirX: dx,
+      dirY: dy,
+      beam: this.pointerBeam && this.droneControlMode,
+      pressDamage,
+      pressHeal,
+      droneControl: this.droneControlMode,
+    };
   };
 
   // -----------------------------------------------------------------------
@@ -430,6 +561,92 @@ export class GameApp {
 
     replaceChildren(this.host, root);
     this.stampTimers(this.remainingSeconds());
+
+    // M9 — the battle renderer owns a persistent <canvas> that must survive this
+    // full DOM rebuild. Mount it once, then re-parent it into each fresh
+    // `.bm-battle` host; tear it down when the Battle Phase is not showing.
+    this.syncBattleRenderer(state);
+  }
+
+  private syncBattleRenderer(state: MatchState): void {
+    if (state.phaseKind !== 'battle') {
+      this.disposeBattle();
+      return;
+    }
+    const host = this.host.querySelector('.bm-battle');
+    if (!(host instanceof HTMLElement)) return; // an overlay (scoreboard) replaced the stage
+
+    if (this.battle === null) {
+      const names = battleNames(state, this.humanId);
+      const preBattle = this.boundaries.find(
+        (b) => b.round === state.round && b.kind === 'selectPosition',
+      );
+      const mine = state.matchups.find((m) => m.a === this.humanId || m.b === this.humanId);
+      if (preBattle === undefined || mine === undefined) return;
+      const ctx = humanBattleContext(
+        preBattle.state,
+        { kind: mine.kind, a: mine.a, b: mine.b },
+        null,
+      );
+      this.battle = new BattleRenderer(host, {
+        ctx,
+        humanPlayerId: this.humanId,
+        playerName: names.playerName,
+        opponentName: names.opponentName,
+        sampleInput: this.sampleInput,
+        reducedMotion:
+          typeof window !== 'undefined' &&
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      });
+      this.wireBattlePointer(this.battle.element);
+      this.battle.start();
+    } else if (this.battle.element.parentNode !== host) {
+      host.appendChild(this.battle.element);
+      this.battle.resize();
+    }
+
+    if (this.battleShopOpen) {
+      const vm = shopVM(state, this.humanId);
+      const shopEl = renderShop(
+        vm,
+        this.shopTab,
+        { cards: changeHeroCardsVM(), cb: { openRole: this.cb.openChangeHero } },
+        this.cb,
+        vm.locked,
+      );
+      host.appendChild(
+        renderBattleShopOverlay({ shopEl, onClose: () => this.closeBattleShop() }),
+      );
+    }
+  }
+
+  private wireBattlePointer(canvas: HTMLCanvasElement): void {
+    const toVec = (e: PointerEvent): void => {
+      const r = canvas.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) {
+        this.pointerVec = null;
+        return;
+      }
+      const nx = (e.clientX - r.left) / r.width - 0.5;
+      const ny = (e.clientY - r.top) / r.height - 0.5;
+      const m = Math.sqrt(nx * nx + ny * ny);
+      this.pointerVec = m < 0.03 ? null : { x: (nx / m) * Math.min(1, m * 3), y: (ny / m) * Math.min(1, m * 3) };
+    };
+    canvas.addEventListener('pointermove', toVec);
+    canvas.addEventListener('pointerdown', (e) => {
+      const hit = this.battle?.hitTest(e.offsetX, e.offsetY);
+      if (hit === 'ability-damage') this.clickDamage = true;
+      else if (hit === 'ability-heal') this.clickHeal = true;
+      else this.pointerBeam = true;
+    });
+    canvas.addEventListener('pointerup', () => {
+      this.pointerBeam = false;
+    });
+    canvas.addEventListener('pointerleave', () => {
+      this.pointerVec = null;
+      this.pointerBeam = false;
+    });
   }
 
   private renderScreen(state: MatchState): HTMLElement {
@@ -476,7 +693,9 @@ export class GameApp {
       }
       case 'battle':
       default:
-        return renderBattle(state, this.humanId);
+        // The M9 Canvas2D renderer + HUD is mounted into this host after the
+        // DOM rebuild (`syncBattleRenderer`), so it survives `replaceChildren`.
+        return renderBattleHost();
     }
   }
 

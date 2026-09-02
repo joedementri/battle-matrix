@@ -12,6 +12,11 @@
  */
 
 import { PROTOCOL_TIER_BONUSES, PROTOCOL_XP_THRESHOLDS } from '../data/constants';
+import {
+  HEALTH_BAR_HP_PER_SEGMENT,
+  HEALTH_BAR_MAX_SEGMENTS,
+  HEALTH_BAR_MIN_SEGMENTS,
+} from '../data/authored';
 import type { Protocol, Role } from '../data/types';
 
 import { changeHeroOffers, protocolLevelFromXp } from './modules';
@@ -176,4 +181,55 @@ export function humanRewardOffers(
   let state = openStrengthenReward(round, needed, lineup, owned, sub);
   if (refreshed) state = refreshStrengthenReward(state, lineup, owned, sub);
   return { needed, offers: state.offers };
+}
+
+// ---------------------------------------------------------------------------
+// M9 battle HUD — the renderer FORMATS these; it never does arithmetic on a
+// health / xp / token value itself (`tests/enforce-no-arith.spec.ts` now also
+// scans `src/render/**`). All of it is a pure function of a plain frame value.
+// ---------------------------------------------------------------------------
+
+export interface HealthBarModel {
+  /** Total segment count for this unit's bar (a function of resolved max health). */
+  readonly segments: number;
+  /** Segments backed by regular health (rounded up so any sliver still lights one). */
+  readonly filled: number;
+  /** Extra segments backed by bonus health, drawn past `segments` in the overhealth tint. */
+  readonly bonus: number;
+  /** 0..1 regular-health fraction (for a continuous underlay if the renderer wants one). */
+  readonly fraction: number;
+}
+
+/**
+ * The segmented health bar the M9 renderer draws above every unit. Segment
+ * granularity is authored (`HEALTH_BAR_HP_PER_SEGMENT`), clamped to a readable
+ * band. `health` is regular health (0..maxHealth); `overhealth` is the bonus
+ * pool depleted first by damage (Reserve Armor, Overflow Recharge).
+ */
+export function healthBarModel(
+  health: number,
+  overhealth: number,
+  maxHealth: number,
+): HealthBarModel {
+  const safeMax = maxHealth > 0 ? maxHealth : 1;
+  const raw = Math.round(safeMax / HEALTH_BAR_HP_PER_SEGMENT);
+  const segments = Math.max(HEALTH_BAR_MIN_SEGMENTS, Math.min(HEALTH_BAR_MAX_SEGMENTS, raw));
+  const clampedHealth = health < 0 ? 0 : health > safeMax ? safeMax : health;
+  const fraction = clampedHealth / safeMax;
+  const filled = clampedHealth <= 0 ? 0 : Math.max(1, Math.ceil(fraction * segments));
+  const perSegment = safeMax / segments;
+  const bonus = overhealth > 0 ? Math.ceil(overhealth / perSegment) : 0;
+  return { segments, filled, bonus, fraction };
+}
+
+/** Ult-charge bar fill, 0..1. A unit casts at `>= 1`; the bar clamps to full. */
+export function ultChargeFraction(ultEnergy: number): number {
+  if (!(ultEnergy > 0)) return 0;
+  return ultEnergy >= 1 ? 1 : ultEnergy;
+}
+
+/** Linear interpolation for renderer-side position tweening. Never fed back into the sim. */
+export function lerp(from: number, to: number, alpha: number): number {
+  const a = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+  return from + (to - from) * a;
 }

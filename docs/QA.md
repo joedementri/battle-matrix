@@ -26,7 +26,7 @@ Reference: `UBMP_ROUND1_START_SCREEN.png`
 | Right panel — two view tabs | Rendered (`1 ◇`, `2 ▤`); tab switching is M9+ | ≈ tabs are inert |
 | Bottom-centre health bar | `50/50`, fill proportional (CSS `calc()` over `--h`/`--m`) | ✅ |
 | Bottom-right key hints | Contextual (`TAB SCOREBOARD`, `ESC MENU`/`ESC BACK`, `B DEPLOY`/`B MODULES`, `EXIT EDITING`) | ≈ per-phase set is best-effort from the screenshots |
-| Arena beneath the panels | 2D placeholder ground; the Canvas2D battle scene is M9 | ⬜ M9 |
+| Arena beneath the panels | Non-battle phases: 2D placeholder ground. Battle phase: the M9 Canvas2D renderer (§6) | ✅ (M9) |
 
 ---
 
@@ -117,18 +117,61 @@ own-half cells, and off-grid drops are rejected.
 
 ---
 
-## 6 · Battle
+## 6 · Battle (M9 — Canvas2D renderer + battle HUD)
 
-References: `UBMP_BATTLE_PROTOCOL_PHASE.png`, `UBMP_BATTLE_PROTOCOL_PHASE_PRACTICE_ROUND.png`
+References: `UBMP_BATTLE_PROTOCOL_PHASE.png` (PvP `2-3`),
+`UBMP_BATTLE_PROTOCOL_PHASE_PRACTICE_ROUND.png` (PvE `1-3`).
 
-M8 renders only the chrome-consistent shell — **the Canvas2D renderer, kill
-feed, ability buttons and battle HUD are M9.**
+The whole battle view is drawn on ONE `<canvas>` by the frame builder
+(`src/render/frame.ts`, pure) + executor (`src/render/executor.ts`, thin). The
+persistent M8 chrome (top bar, left rail, right panel, `50/50` bar, corner key
+hints) still surrounds it. `?debug` (URL hash) shows a live frame-timing readout.
+
+### Camera — deliberate deviation from the screenshots
+
+The screenshots show a **3D third-person chase view behind the drone**. Our arena
+is a 2D canvas (locked project decision), so M9 renders the **whole arena in a
+fixed top-down view with the drone as one more token**. Rationale: the 6×4
+placement is the entire point of the deploy phase and the mode; a chase cam would
+keep most of the board off-screen. Recorded here and in the M9 report as a
+deliberate deviation. The drone token is a forward chevron in its match colour,
+visually distinct from the round unit tokens.
+
+### `LALT CURSOR MODE` — 2D adaptation
+
+The original releases mouse-look so the pointer can hit UI. In 2D there is no
+mouse-look to release, so `LALT` toggles the *structure*: **pointer-drives-drone
+⇄ pointer-free-for-UI**. In cursor mode the pointer no longer steers the drone or
+holds the beam (WASD / arrows still fly it) and clicks fall through to the
+mid-battle module menu. The corner readout reads `DRONE CONTROL` / `CURSOR MODE`.
+Recorded as a deliberate adaptation.
+
+### Checklist
 
 | Element | Compare | Status |
 |---|---|---|
-| Your name top-left, opponent name top-right | Present | ✅ |
-| `BATTLE PROTOCOL` | Shown | ✅ |
-| Arena / units / kill feed / `LSHIFT` `E` buttons / Speed Up banner | — | ⬜ M9 |
+| Your name top-left | `text` command `player-name`, left-anchored, gold underline | ✅ (asserted) |
+| Opponent name top-right | `text` command `opponent-name`, right-anchored; empty on a PvE round (`1-3` shot has none) | ✅ (asserted) |
+| Round-phase `⏱ 2-3` + phase strip | From M8 chrome, unchanged | ✅ |
+| Arena floor + both 6×4 deploy grids | Pre-rendered once to an offscreen canvas, blitted each frame; centre line between the halves | ✅ |
+| Unit tokens | Role shape (shield / blade / cross) in a coloured ring + 2-letter initials; side-tinted outline; dead units dim, keep the token, drop the bars | ✅ (asserted) |
+| Galacta Bots | **Distinct monster token** (jagged blob, `--bm-galacta` tint), never a hero shape — `1-3` shot's brown/purple mobs | ✅ (asserted) |
+| Long segmented health bar above every unit | Segment count from `sim/selectors.healthBarModel` (`HEALTH_BAR_HP_PER_SEGMENT = 25`, clamped 6–60); bonus-health segments in the accent tint | ✅ (asserted) |
+| Ult-charge bar | Thin bar under the health bar, fill = `ultChargeFraction`; hidden at 0 | ✅ |
+| Damage numbers | Floating, rise + fade; fed by M5's per-hit `damageLog` **by cursor**, renderer-local, never in sim state; chip hits (< 1) suppressed | ✅ (asserted no-double-count) |
+| Optional target lines | Dashed line unit → current target, side-tinted, low alpha (`layout.targetLines`) | ✅ |
+| The Ultron Drone | Forward-chevron token in the match colour, flown top-down (camera note above); beam flag carried for the executor | ✅ |
+| Encephalo-Ray `∞` readout | Bottom-left `Encephalo-Ray ∞` (infinite ammo) | ✅ |
+| Kill feed (top-right, under the opp. name) | `KILLER ⟶ weapon ⟶ VICTIM`, newest first, capped at 5, entries fade out (held at full opacity under `prefers-reduced-motion`); weapon labels are M5's `DamageSource` set incl. `Ultron Drone` for drone kills | ✅ (asserted: order, once-only via cursor, cap, reduced-motion) |
+| `LSHIFT` / `E` ability buttons (bottom-right) | Keycap + ability name; **grey exactly when the sim marks the drone ability spent** (`FrameDrone.oneTimeDamageUsed` / `…HealUsed`), never HUD-tracked; both render **unspent at battle start** (the PvE shot) | ✅ (asserted: flips on the exact consume tick) |
+| Hint bar (centred, under the health bar) | `LALT CURSOR MODE / B MODULES` (`strings.battleHint()`) | ✅ (asserted verbatim) |
+| `50/50` health bar | M8 chrome bottom-centre, unchanged (drone HP = player HP, never changes mid-battle) | ✅ |
+| Speed Up Protocol | On-screen `SPEED UP PROTOCOL` banner when the battle-timer-0 sub-stage flips (`speedUpActive`); damage ×2.2 is M5 | ✅ (asserted: banner iff active) — announcement copy is authored (no screenshot of it) |
+| `B` mid-battle | Opens the module menu **over the still-ticking battle** (canvas stays mounted), with *"The effects of purchased modules take effect in the next round."*; the buy lands in `ownedModules` for next round's `ResolvedUnit` freeze, not this round's combat | ✅ (asserted end-to-end + through the HUD path) |
+| Fixed-timestep loop | Sim 30 Hz integer ticks; renderer interpolates at `alpha`; frame-delta clamp + spiral-of-death drop; tick count = f(elapsed) only | ✅ (asserted: identical ticks + byte-identical state at 30/60/144 fps; 5 s stall clamped) |
+| Readonly snapshot | Frame builder input is `DeepReadonly<BattleFrameState>` and the live snapshot is `deepFreeze`d every tick | ✅ (asserted: full frame vs a deep-frozen state) |
+| Live input → M6 quantized stream | Key/pointer latched, sampled **once per sim tick**, quantized at capture (`encodeDroneMove`); banked as a `driveDrone` action so `runMatch` resolves the round with the flown drone; replays byte-identically | ✅ (asserted) |
+| Performance | No frame-loop allocation (pooled `CmdList`, cached path ops + colour tokens + text metrics), no `shadowBlur` / `filter`, offscreen static arena. Measured: **build+executor ≈ 0.09 ms/frame** for 12 units + damage numbers + kill feed + beam + Speed Up (recording stub 2D ctx; happy-dom has no real one). Frame builder alone ≈ 0.04 ms. Well inside the 16.6 ms / 60 fps budget. | ✅ |
 
 ---
 

@@ -3,22 +3,24 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /*
- * ENFORCEMENT (plan, M8): "no arithmetic on tokens / health / XP outside
- * src/sim/". The UI layer dispatches actions and renders state; every numeric
- * derivation must come from a `src/sim` export (`economy.previewIncome`,
- * `modules.rarityOdds`, `modules.shopCardValue` / `ownedValue`, the
- * `sim/selectors` helpers). The UI may only FORMAT.
+ * ENFORCEMENT (plan, M8; M9 extends the scan to `src/render/**`): "no arithmetic
+ * on tokens / health / XP outside src/sim/". The UI and renderer layers dispatch
+ * actions and render state; every numeric derivation must come from a `src/sim`
+ * export (`economy.previewIncome`, `modules.rarityOdds`, `modules.shopCardValue`
+ * / `ownedValue`, the `sim/selectors` helpers — `healthBarModel`,
+ * `ultChargeFraction`, `lerp`). The UI / renderer may only FORMAT.
  *
- * This scans every `src/ui/**\/*.ts`, strips comments and single/double-quoted
- * strings (template literals are kept so `${a / b}` is still checked), and flags
- * an arithmetic operator ( + - * / % ++ -- += … ) adjacent to an identifier
- * whose name is "about" tokens / health / hp / xp / price / threshold.
+ * This scans every `src/ui/**\/*.ts` and `src/render/**\/*.ts`, strips comments
+ * and single/double-quoted strings (template literals are kept so `${a / b}` is
+ * still checked), and flags an arithmetic operator ( + - * / % ++ -- += … )
+ * adjacent to an identifier whose name is "about" tokens / health / hp / xp /
+ * price / threshold.
  *
- * ALLOWLIST: exact `relativePath:lineNumber` entries, each justified in the M8
- * report. Keep it minimal.
+ * ALLOWLIST: exact `relativePath:lineNumber` entries, each justified in the M8 /
+ * M9 report. Keep it minimal.
  */
 
-const UI_DIR = join(process.cwd(), 'src', 'ui');
+const SCAN_DIRS = [join(process.cwd(), 'src', 'ui'), join(process.cwd(), 'src', 'render')];
 
 // path:line -> why it is pure display formatting and not a game rule
 const ALLOWLIST: Readonly<Record<string, string>> = {
@@ -82,10 +84,11 @@ function offenders(code: string): { line: number; text: string }[] {
 }
 
 describe('enforcement — no arithmetic on tokens / health / xp outside src/sim/', () => {
-  const files = tsFiles(UI_DIR);
+  const files = SCAN_DIRS.flatMap(tsFiles);
 
-  it('finds ui source files to scan', () => {
+  it('finds ui + render source files to scan', () => {
     expect(files.length).toBeGreaterThan(15);
+    expect(files.some((f) => f.replace(/\\/g, '/').includes('/src/render/'))).toBe(true);
   });
 
   for (const file of files) {

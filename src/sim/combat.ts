@@ -1259,87 +1259,238 @@ function countAlive(field: BattleField, side: 0 | 1): number {
 }
 
 // ---------------------------------------------------------------------------
+// Per-tick frame snapshot (M9 renderer) — a plain, deep-freeze-safe projection
+// of the live field. Read-only by construction: the renderer never receives the
+// mutable `BattleField`, only this. `x` / `y` interpolation, health-bar segment
+// counts and ult-charge fractions are all derived downstream (`sim/selectors`).
+// ---------------------------------------------------------------------------
+
+export interface FrameUnit {
+  readonly id: number;
+  readonly side: 0 | 1;
+  readonly slot: number;
+  readonly heroId: string;
+  readonly isGalactaBot: boolean;
+  readonly role: Role;
+  readonly alive: boolean;
+  readonly health: number;
+  readonly overhealth: number;
+  readonly maxHealth: number;
+  readonly startTotalHealth: number;
+  /** 0..~1; a unit casts at `>= 1` (kept unclamped so the bar can briefly read full). */
+  readonly ultEnergy: number;
+  readonly ultCasts: number;
+  /** Current target unit id, or -1 — feeds the optional target lines. */
+  readonly targetId: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface FrameDrone {
+  readonly side: 0 | 1;
+  readonly playerId: number;
+  readonly colour: DroneColour;
+  /** = the owning player's 50-based health, constant for the whole battle. */
+  readonly health: number;
+  readonly x: number;
+  readonly y: number;
+  readonly beamHeld: boolean;
+  readonly oneTimeDamageUsed: boolean;
+  readonly oneTimeHealUsed: boolean;
+}
+
+export interface BattleFrameState {
+  readonly tick: number;
+  readonly speedUpActive: boolean;
+  readonly speedUpStartedAtTick: number | null;
+  readonly bounds: {
+    readonly minX: number;
+    readonly maxX: number;
+    readonly minY: number;
+    readonly maxY: number;
+  };
+  readonly units: readonly FrameUnit[];
+  readonly drones: readonly FrameDrone[];
+}
+
+/** Project the live field into a plain, immutable-by-construction frame state. */
+export function sampleBattleFrame(field: BattleField): BattleFrameState {
+  return {
+    tick: field.tick,
+    speedUpActive: field.speedUpActive,
+    speedUpStartedAtTick: field.speedUpStartedAtTick,
+    bounds: {
+      minX: ARENA_BOUNDS.minX,
+      maxX: ARENA_BOUNDS.maxX,
+      minY: ARENA_BOUNDS.minY,
+      maxY: ARENA_BOUNDS.maxY,
+    },
+    units: field.units.map((u) => ({
+      id: u.id,
+      side: u.side,
+      slot: u.slot,
+      heroId: u.heroId,
+      isGalactaBot: u.isGalactaBot,
+      role: u.role,
+      alive: u.alive,
+      health: u.health,
+      overhealth: u.overhealth,
+      maxHealth: u.maxHealth,
+      startTotalHealth: u.startTotalHealth,
+      ultEnergy: u.ultEnergy,
+      ultCasts: u.ultCasts,
+      targetId: u.targetId,
+      x: u.x,
+      y: u.y,
+    })),
+    drones: field.drones.map((d) => ({
+      side: d.side,
+      playerId: d.playerId,
+      colour: d.colour,
+      health: d.health,
+      x: d.x,
+      y: d.y,
+      beamHeld: d.beamHeldThisTick,
+      oneTimeDamageUsed: d.oneTimeDamageUsed,
+      oneTimeHealUsed: d.oneTimeHealUsed,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public entry points
 // ---------------------------------------------------------------------------
 
-export function simulateBattle(ctx: CombatContext, opts: SimulateOptions = {}): BattleTrace {
-  const maxTicks = opts.maxTicks ?? BATTLE_MAX_TICKS;
-  const tieCapTicks = opts.tieCapTicks ?? BATTLE_TIE_CAP_TICKS;
-  const speedUpTriggerTicks = opts.speedUpTriggerTicks ?? SPEED_UP_TRIGGER_TICKS;
+/** Detect a terminal condition after a tick, build the `BattleTrace`, or throw. */
+function terminalTrace(field: BattleField, runOpts: RunOpts): BattleTrace | null {
+  const aliveA = countAlive(field, 0);
+  const aliveB = countAlive(field, 1);
 
-  const field = buildField(ctx, opts);
-  const runOpts: RunOpts = {
-    maxTicks,
-    tieCapTicks,
-    speedUpTriggerTicks,
-    externalActors: opts.externalActors,
-  };
+  let result: BattleResult | null = null;
+  let reason: 'elimination' | 'tieCap' | null = null;
 
-  for (;;) {
-    runTick(field, runOpts);
-    if (opts.onTick !== undefined) opts.onTick(field);
-
-    const aliveA = countAlive(field, 0);
-    const aliveB = countAlive(field, 1);
-
-    let result: BattleResult | null = null;
-    let reason: 'elimination' | 'tieCap' | null = null;
-
-    if (aliveA === 0 || aliveB === 0) {
-      result = aliveA > 0 ? 'win' : aliveB > 0 ? 'loss' : 'tie';
-      reason = 'elimination';
-    } else if (field.tick >= tieCapTicks) {
-      result = 'tie';
-      reason = 'tieCap';
-    } else if (field.tick >= maxTicks) {
-      throw new Error(
-        `combat: exceeded maxTicks=${maxTicks} at tick ${field.tick} without resolving — this is a bug report, not a game outcome`,
-      );
-    }
-
-    if (result !== null && reason !== null) {
-      const survivors =
-        result === 'win' ? aliveA : result === 'loss' ? aliveB : Math.max(aliveA, aliveB);
-      return {
-        outcome: {
-          result,
-          survivingUnits: Math.min(6, Math.max(1, survivors)),
-          survivorsSideA: aliveA,
-          survivorsSideB: aliveB,
-        },
-        tickCount: field.tick,
-        endReason: reason,
-        digest: field.hash.hex(),
-        kills: field.kills,
-        revives: field.revives,
-        speedUpStartedAtTick: field.speedUpStartedAtTick,
-        finalUnits: field.units.map((u) => ({
-          id: u.id,
-          side: u.side,
-          heroId: u.heroId,
-          isGalactaBot: u.isGalactaBot,
-          alive: u.alive,
-          health: u.health,
-          overhealth: u.overhealth,
-          maxHealth: u.maxHealth,
-          ultCasts: u.ultCasts,
-          x: u.x,
-          y: u.y,
-        })),
-        finalDrones: field.drones.map((d) => ({
-          side: d.side,
-          playerId: d.playerId,
-          colour: d.colour,
-          health: d.health,
-          x: d.x,
-          y: d.y,
-          oneTimeDamageUsed: d.oneTimeDamageUsed,
-          oneTimeHealUsed: d.oneTimeHealUsed,
-        })),
-        damageLog: field.damageLog,
-      };
-    }
+  if (aliveA === 0 || aliveB === 0) {
+    result = aliveA > 0 ? 'win' : aliveB > 0 ? 'loss' : 'tie';
+    reason = 'elimination';
+  } else if (field.tick >= runOpts.tieCapTicks) {
+    result = 'tie';
+    reason = 'tieCap';
+  } else if (field.tick >= runOpts.maxTicks) {
+    throw new Error(
+      `combat: exceeded maxTicks=${runOpts.maxTicks} at tick ${field.tick} without resolving — this is a bug report, not a game outcome`,
+    );
   }
+
+  if (result === null || reason === null) return null;
+
+  const survivors =
+    result === 'win' ? aliveA : result === 'loss' ? aliveB : Math.max(aliveA, aliveB);
+  return {
+    outcome: {
+      result,
+      survivingUnits: Math.min(6, Math.max(1, survivors)),
+      survivorsSideA: aliveA,
+      survivorsSideB: aliveB,
+    },
+    tickCount: field.tick,
+    endReason: reason,
+    digest: field.hash.hex(),
+    kills: field.kills,
+    revives: field.revives,
+    speedUpStartedAtTick: field.speedUpStartedAtTick,
+    finalUnits: field.units.map((u) => ({
+      id: u.id,
+      side: u.side,
+      heroId: u.heroId,
+      isGalactaBot: u.isGalactaBot,
+      alive: u.alive,
+      health: u.health,
+      overhealth: u.overhealth,
+      maxHealth: u.maxHealth,
+      ultCasts: u.ultCasts,
+      x: u.x,
+      y: u.y,
+    })),
+    finalDrones: field.drones.map((d) => ({
+      side: d.side,
+      playerId: d.playerId,
+      colour: d.colour,
+      health: d.health,
+      x: d.x,
+      y: d.y,
+      oneTimeDamageUsed: d.oneTimeDamageUsed,
+      oneTimeHealUsed: d.oneTimeHealUsed,
+    })),
+    damageLog: field.damageLog,
+  };
+}
+
+/**
+ * A battle advanced one 30 Hz tick at a time. `simulateBattle` runs it to
+ * completion in one call; M9's render loop owns the wall clock and drives
+ * `step()` from a fixed-timestep accumulator, reading `sample()` between ticks
+ * for interpolation. The tick logic, ordering and RNG draws are byte-identical
+ * either way — this class only hoists the loop body.
+ */
+export class BattleController {
+  private readonly field: BattleField;
+  private readonly opts: SimulateOptions;
+  private readonly runOpts: RunOpts;
+  private finished: BattleTrace | null = null;
+
+  constructor(ctx: CombatContext, opts: SimulateOptions = {}) {
+    this.opts = opts;
+    this.field = buildField(ctx, opts);
+    this.runOpts = {
+      maxTicks: opts.maxTicks ?? BATTLE_MAX_TICKS,
+      tieCapTicks: opts.tieCapTicks ?? BATTLE_TIE_CAP_TICKS,
+      speedUpTriggerTicks: opts.speedUpTriggerTicks ?? SPEED_UP_TRIGGER_TICKS,
+      externalActors: opts.externalActors,
+    };
+  }
+
+  get tick(): number {
+    return this.field.tick;
+  }
+  get done(): boolean {
+    return this.finished !== null;
+  }
+  get trace(): BattleTrace | null {
+    return this.finished;
+  }
+  get speedUpActive(): boolean {
+    return this.field.speedUpActive;
+  }
+  /** Append-only kill stream — the M9 kill feed consumes it by cursor, never by diffing. */
+  get kills(): readonly KillEvent[] {
+    return this.field.kills;
+  }
+  get revives(): readonly ReviveEvent[] {
+    return this.field.revives;
+  }
+  /** Append-only per-hit damage stream (present when `opts.trace` was set) — the M9 damage numbers consume it by cursor. */
+  get damageLog(): readonly DamageLogEntry[] | null {
+    return this.field.damageLog;
+  }
+
+  /** Advance exactly one tick. A no-op once `done`. */
+  step(): void {
+    if (this.finished !== null) return;
+    runTick(this.field, this.runOpts);
+    if (this.opts.onTick !== undefined) this.opts.onTick(this.field);
+    this.finished = terminalTrace(this.field, this.runOpts);
+  }
+
+  /** A plain, immutable-by-construction snapshot of the current field (for the renderer). */
+  sample(): BattleFrameState {
+    return sampleBattleFrame(this.field);
+  }
+}
+
+export function simulateBattle(ctx: CombatContext, opts: SimulateOptions = {}): BattleTrace {
+  const controller = new BattleController(ctx, opts);
+  while (!controller.done) controller.step();
+  return controller.trace!;
 }
 
 /**

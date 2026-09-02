@@ -155,6 +155,8 @@ exports[`modules.json > every transcribed in-game module string is locked 1`] = 
 exports[`strings.ts (verbatim) > every string in strings.ts is locked (edit = loud failure) 1`] = `
 {
   "functions": [
+    "battleFont",
+    "battleHint",
     "chooseOneOfRandom",
     "chooseRoleCardTitle",
     "diamondCost",
@@ -216,7 +218,13 @@ exports[`strings.ts (verbatim) > every string in strings.ts is locked (edit = lo
     "COL_INITIATE_PROTOCOL": "Initiate Protocol",
     "COL_PLAYER_NAME": "Player Name",
     "COL_RANK": "Rank",
+    "CURSOR_MODE_OFF": "DRONE CONTROL",
+    "CURSOR_MODE_ON": "CURSOR MODE",
+    "DRONE_ABILITY_ENCEPHALO_RAY": "Encephalo-Ray",
+    "DRONE_ABILITY_ONE_TIME_DAMAGE": "One-Time Damage",
+    "DRONE_ABILITY_ONE_TIME_HEALING": "One-Time Healing",
     "FINAL_STANDINGS": "FINAL STANDINGS",
+    "FONT_FAMILY_STACK": "'Roboto Condensed', 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif",
     "HEROES_SWAPPED_SUBTITLE": "HEROES SWAPPED IN THIS PHASE WILL TAKE EFFECT IN THE NEXT ROUND.",
     "HINT_B_DEPLOY": "B DEPLOY",
     "HINT_B_MODULES": "B MODULES",
@@ -226,6 +234,17 @@ exports[`strings.ts (verbatim) > every string in strings.ts is locked (edit = lo
     "HINT_EXIT_EDITING": "EXIT EDITING",
     "HINT_LALT_CURSOR_MODE": "LALT CURSOR MODE",
     "HINT_TAB_SCOREBOARD": "TAB SCOREBOARD",
+    "INFINITE_AMMO": "∞",
+    "KEY_E": "E",
+    "KEY_LSHIFT": "LSHIFT",
+    "KILL_FEED_ARROW": "⟶",
+    "KILL_FEED_WEAPON": {
+      "ability": "Ability",
+      "drone": "Ultron Drone",
+      "module": "Module",
+      "primary": "Primary",
+      "ultimate": "Ultimate",
+    },
     "LOCKED_MODULES_FOOTER": "Locked modules will not be refreshed in the next round",
     "MODE_TITLE": "ULTRON'S BATTLE MATRIX PROTOCOL",
     "OUT_OF_PLAY": "Out of Play",
@@ -250,6 +269,7 @@ exports[`strings.ts (verbatim) > every string in strings.ts is locked (edit = lo
     "SELECT_MODULES_HEADER": "Select the Modules you wish to purchase",
     "SELECT_POSITION": "Select Position",
     "SELECT_REWARD": "SELECT REWARD",
+    "SPEED_UP_PROTOCOL": "SPEED UP PROTOCOL",
     "STAT_LABEL": {
       "damageAndHealingPctPerUniqueRole": "Damage & Healing / unique role",
       "damagePct": "Damage Output",

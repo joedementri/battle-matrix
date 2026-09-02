@@ -430,6 +430,20 @@ export const DRONE_MOVE_QUANT = 1000;
 export const ENCEPHALO_RAY_DPS = 0.02;
 
 /**
+ * Segmented health bar granularity (M9 renderer) — AUTHORED. Every unit token
+ * carries a "long segmented health bar" (plan, M9 renderer content); the plan
+ * fixes that it is segmented but not the segment size. One segment per this many
+ * points of resolved max health, clamped to a sane 6..60 bar so a 250-HP Duelist
+ * and a 700-HP Vanguard both read at a glance. Pure display: `sim/selectors.ts`
+ * turns `(health, maxHealth)` into a segment count so `src/render/` never does
+ * arithmetic on a health value. Not falsifiable by footage (a rendering choice);
+ * changing it only changes how finely the bar is chunked.
+ */
+export const HEALTH_BAR_HP_PER_SEGMENT = 25;
+export const HEALTH_BAR_MIN_SEGMENTS = 6;
+export const HEALTH_BAR_MAX_SEGMENTS = 60;
+
+/**
  * `LSHIFT` One-Time Damage magnitude, flat, per living enemy unit — AUTHORED.
  * Fires at most once per Battle Phase. 120 finishes a near-dead Duelist and
  * dents a tank without wiping a healthy line — a finisher, not a win button.
@@ -738,6 +752,12 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
     'AUTHORED (M6). Fixed-point divisor for recorded drone movement vectors (integer components in ±this, ÷ at read time). An engine-fidelity choice so replays reproduce across machines; not falsifiable by footage.',
   ENCEPHALO_RAY_DPS:
     "AUTHORED (M6), deliberately tiny. The real budget is an ASSERTION: drone.spec.ts measures the beam held the whole battle and proves it is <0.1 % of a Duelist's total — never a win condition. Falsified by footage where the beam does meaningful damage.",
+  HEALTH_BAR_HP_PER_SEGMENT:
+    'AUTHORED (M9). One health-bar segment per 25 points of resolved max health (bar clamped to HEALTH_BAR_MIN_SEGMENTS..HEALTH_BAR_MAX_SEGMENTS). A rendering-granularity choice — not falsifiable by footage; changing it only rechunks the bar.',
+  HEALTH_BAR_MIN_SEGMENTS:
+    'AUTHORED (M9). Lower clamp on the segmented health bar so even a 250-HP Duelist shows a readable number of ticks. Rendering choice; not footage-falsifiable.',
+  HEALTH_BAR_MAX_SEGMENTS:
+    'AUTHORED (M9). Upper clamp on the segmented health bar so a 700-HP + bonus-health Vanguard does not produce an unreadably fine bar. Rendering choice; not footage-falsifiable.',
   DRONE_ONE_TIME_DAMAGE:
     'AUTHORED (M6). LSHIFT One-Time Damage, flat, per living enemy unit; fires at most once per Battle Phase. A finisher, not a win button. M11 tunes. Falsified by footage pinning it to a different value or a percentage.',
   DRONE_ONE_TIME_HEALING:

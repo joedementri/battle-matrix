@@ -14,7 +14,7 @@
 import type { Protocol } from '../data/types';
 import type { RngSnapshot, Substream } from './rng';
 import { hash128Hex } from './rng';
-import type { DroneColour, DroneSpec } from './drone';
+import type { DroneColour, DroneInputStream, DroneSpec } from './drone';
 import type { OwnedModule, ShopState, StrengthenInventory } from './modules';
 import type { SideModules } from './stats';
 import type { Deployment, DeployCell } from './board';
@@ -143,16 +143,34 @@ export interface SwapHeroAction {
 }
 
 /**
+ * M9 — the human's recorded, quantized Ultron-Drone input for one round's Battle
+ * Phase. The renderer captures it live (`src/render/battleRenderer.ts`), sampled
+ * once per 30 Hz tick and quantized at capture (`sim/drone.encodeDroneMove`),
+ * then emits exactly one of these per battle so `runMatch` resolves that round's
+ * combat with the flown drone rather than the placeholder policy. Round-addressed
+ * (not phase-cursor-addressed): `runMatch` folds all of them into a
+ * `round -> stream` map up front, because the battle resolves at the START of
+ * the Battle Phase, before its actions are consumed. Absent (`[]` action list,
+ * every existing golden) ⇒ the human drone stays on policy ⇒ byte-identical.
+ */
+export interface DriveDroneAction {
+  readonly type: 'driveDrone';
+  readonly round: number;
+  readonly input: DroneInputStream;
+}
+
+/**
  * The action vocabulary. Later milestones extend this union in place — the
  * machine already skips any action it does not recognise for the current phase,
  * so adding members is non-breaking:
+ *   M9: driveDrone — the human's per-round recorded drone-input stream (live
+ *       capture is the renderer's job; the sim only replays it).
  *   M8: swapHero (Module Draw) — the Change-Hero / swap-out screens. The role
  *       offer set is chosen in the UI (`sim/selectors.changeHeroOfferIds`); the
  *       action carries only the resolved incoming/outgoing pair.
  *   M7: buyModule / sellModule / refreshShop / lockShop (Module Draw) · deploy
  *       (Select Position).
  *   M6: selectReward / refreshReward (the Practice reward phase)
- *   M9: driveDrone (per-tick live capture — recorded input for the sim's drone seam)
  */
 export type Action =
   | SelectLineupAction
@@ -165,7 +183,8 @@ export type Action =
   | RefreshShopAction
   | LockShopAction
   | DeployAction
-  | SwapHeroAction;
+  | SwapHeroAction
+  | DriveDroneAction;
 
 // ---------------------------------------------------------------------------
 // Injected combat — M2 ships a stub; M5 swaps in the real resolver, untouched

@@ -235,3 +235,59 @@ export const HINT_ENTER_CHAT = 'ENTER CHAT';
  * `constants.ts` as `ARENA_MAP`; `data.spec.ts` asserts the two stay in sync.
  */
 export const ARENA_MAP_NAME = 'Age of Ultron: Digital Duel Grounds';
+
+// ---------------------------------------------------------------------------
+// Battle HUD (M9) — the renderer overlay
+// ---------------------------------------------------------------------------
+
+/**
+ * The Speed Up Protocol on-screen announcement. No screenshot captures the exact
+ * announcement copy (the wiki only names the stage), so this is AUTHORED to
+ * match the mode's heading voice and the phase-strip label — noted in the M9
+ * report.
+ */
+export const SPEED_UP_PROTOCOL = 'SPEED UP PROTOCOL';
+
+/** Keycap glyphs for the two one-time drone abilities and the infinite-ammo beam. */
+export const KEY_LSHIFT = 'LSHIFT';
+export const KEY_E = 'E';
+export const INFINITE_AMMO = '∞';
+
+/** The three drone abilities, named per the plan's "Ultron Drone" table. */
+export const DRONE_ABILITY_ENCEPHALO_RAY = 'Encephalo-Ray';
+export const DRONE_ABILITY_ONE_TIME_DAMAGE = 'One-Time Damage';
+export const DRONE_ABILITY_ONE_TIME_HEALING = 'One-Time Healing';
+
+/**
+ * Kill-feed weapon labels, keyed by M5's `DamageSource` union values
+ * (`primary` / `ability` / `ultimate` / `module` / `drone`). Rendered between
+ * the killer and victim names as `KILLER  ⟶  weapon  ⟶  VICTIM`.
+ */
+export const KILL_FEED_WEAPON: Readonly<Record<string, string>> = {
+  primary: 'Primary',
+  ability: 'Ability',
+  ultimate: 'Ultimate',
+  module: 'Module',
+  drone: 'Ultron Drone',
+};
+
+/** The arrow drawn on either side of the kill-feed weapon label. */
+export const KILL_FEED_ARROW = '⟶';
+
+/** Centred battle hint under the health bar: `LALT CURSOR MODE / B MODULES`. */
+export const battleHint = (): string => `${HINT_LALT_CURSOR_MODE} / ${HINT_B_MODULES}`;
+
+/** LALT toggles between pointer-drives-drone and pointer-free-for-UI (2D adaptation of the original's mouse-look release). */
+export const CURSOR_MODE_ON = 'CURSOR MODE';
+export const CURSOR_MODE_OFF = 'DRONE CONTROL';
+
+/**
+ * The canvas font family stack for the battle renderer — the same faces as CSS
+ * `--bm-font`, kept here (not `src/render/`) so the string-enforcement grep over
+ * `src/render/**` never trips on a bare `'Roboto Condensed', …` literal.
+ */
+export const FONT_FAMILY_STACK =
+  "'Roboto Condensed', 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif";
+
+/** Compose a Canvas2D `font` value: `battleFont('800 italic 16px')`. */
+export const battleFont = (sizeAndStyle: string): string => `${sizeAndStyle} ${FONT_FAMILY_STACK}`;

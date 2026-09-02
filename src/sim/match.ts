@@ -48,7 +48,7 @@ import type { RngSnapshot, Substream } from './rng';
 import { isValidDeployment } from './board';
 import type { DeployCell, Deployment } from './board';
 import { assignDroneColours, planMatchupDrones } from './drone';
-import type { DroneColour } from './drone';
+import type { DroneColour, DroneInputStream, DroneSpec } from './drone';
 import { applyBattleResolution, applyRoundStartIncome } from './economy';
 import {
   accountLevels,
@@ -846,6 +846,7 @@ function combatContextFor(
   rng: RngStream,
   round: number,
   m: WorkMatchup,
+  humanDroneInput?: DroneInputStream | null,
 ): CombatContext {
   const a = work.players[m.a]!;
   const sideA = {
@@ -895,14 +896,15 @@ function combatContextFor(
     };
   }
 
-  // Drones (M6). Side A is always a living player. `planMatchupDrones` applies
+  // Drones (M6/M9). Side A is always a living player. `planMatchupDrones` applies
   // the AUTHORED mirror/phantom calls (mirror gets a policy opponent drone;
-  // phantom and PvE do not). No recorded input in the headless action vocabulary
-  // yet (M9 owns live capture), so every drone runs on the shared M7 drone
-  // policy (`dronePolicy.ts`).
+  // phantom and PvE do not). Every drone runs on the shared drone policy
+  // (`dronePolicy.ts`) UNLESS this is the human's matchup and M9 handed us a
+  // recorded per-tick stream via a `driveDrone` action — then the human's drone
+  // replays that stream instead. Opponent drones stay on policy.
   const opponentForDrone =
     m.kind === 'pvp' || m.kind === 'mirror' || m.kind === 'phantom' ? work.players[m.b]! : null;
-  const drones = planMatchupDrones({
+  let drones: readonly DroneSpec[] = planMatchupDrones({
     matchupKind: m.kind,
     a: { playerId: m.a, colour: a.droneColour, health: a.health },
     b:
@@ -914,6 +916,12 @@ function combatContextFor(
             health: opponentForDrone.health,
           },
   });
+  if (humanDroneInput !== undefined && humanDroneInput !== null) {
+    const humanId = work.players.find((p) => p.isHuman)?.id;
+    if (humanId !== undefined) {
+      drones = drones.map((d) => (d.playerId === humanId ? { ...d, input: humanDroneInput } : d));
+    }
+  }
 
   return {
     round,
@@ -924,6 +932,34 @@ function combatContextFor(
     rng: rng.stream(`combat:${m.kind}:${m.a}:${m.b}`, round),
     drones,
   };
+}
+
+/**
+ * M9 — rebuild the human seat's `CombatContext` for the current round's Battle
+ * Phase from a PRE-BATTLE boundary state (the `selectPosition` phase, phase 2)
+ * plus the resolved matchup (read from the `battle` boundary's `state.matchups`).
+ * The renderer drives a stepped `simulateBattle` on this so what the player sees
+ * IS what `runMatch` will resolve once the recorded `driveDrone` stream is
+ * threaded back in: substream seeds are pure `deriveSeed(masterSeed, key)`, so a
+ * fresh `RngStream(seed)` lands the `combat:*` substream on the identical seed.
+ */
+export function humanBattleContext(
+  preBattleState: MatchState,
+  matchup: { readonly kind: MatchupKind; readonly a: number; readonly b: number },
+  humanDroneInput: DroneInputStream | null,
+): CombatContext {
+  const work = preBattleState as unknown as WorkState;
+  const rng = new RngStream(preBattleState.seed);
+  const m: WorkMatchup = {
+    kind: matchup.kind,
+    a: matchup.a,
+    b: matchup.b,
+    resultA: null,
+    survivingUnits: null,
+    healthLossA: 0,
+    healthLossB: 0,
+  };
+  return combatContextFor(work, rng, preBattleState.round, m, humanDroneInput);
 }
 
 export interface EliminatedLike {
@@ -995,14 +1031,20 @@ function runBattlePhase(
   rng: RngStream,
   combat: CombatResolver,
   maxRounds: number,
+  humanDroneInput?: DroneInputStream | null,
 ): boolean {
   const round = work.round;
   const matchups = buildMatchups(work, rng, round);
   work.matchups = matchups;
 
-  // Resolve via the injected resolver.
+  const humanId = work.players.find((p) => p.isHuman)?.id ?? -1;
+
+  // Resolve via the injected resolver. The human's own matchup replays the M9
+  // recorded drone stream when one was supplied; every other matchup, and every
+  // opponent drone, stays on the shared policy.
   for (const m of matchups) {
-    const outcome = combat.resolve(combatContextFor(work, rng, round, m));
+    const forHuman = m.a === humanId || m.b === humanId ? humanDroneInput : null;
+    const outcome = combat.resolve(combatContextFor(work, rng, round, m, forHuman));
     m.resultA = outcome.result;
     m.survivingUnits = clampSurvivors(outcome.survivingUnits);
   }
@@ -1233,6 +1275,16 @@ export function runMatch(
   work.actionCursor = cursor.i;
   pushBoundary(boundaries, work, rng, 0, 0, 'draft');
 
+  // M9 — the human's recorded per-round drone streams. Collected up front (not
+  // via the phase cursor) because a round's battle resolves at the START of its
+  // Battle Phase, before that phase's actions are consumed. Last write per round
+  // wins. An empty / driveDrone-free action list leaves this map empty and the
+  // human drone on policy — every pre-M9 golden is byte-identical.
+  const humanDroneInputs = new Map<number, DroneInputStream>();
+  for (const act of actions) {
+    if (act.type === 'driveDrone') humanDroneInputs.set(act.round, act.input);
+  }
+
   // ---- Round loop ----
   work.status = 'inRound';
   for (let round = 1; round <= maxRounds; round++) {
@@ -1264,7 +1316,7 @@ export function runMatch(
       }
 
       const matchFinished = work.phaseKind === 'battle'
-        ? runBattlePhase(work, rng, combat, maxRounds)
+        ? runBattlePhase(work, rng, combat, maxRounds, humanDroneInputs.get(round) ?? null)
         : false;
 
       const input = consumeUntilPhaseEnd(actions, cursor);
@@ -1272,6 +1324,12 @@ export function runMatch(
       work.actionCursor = cursor.i;
 
       if (work.phaseKind === 'moduleDraw') {
+        applyHumanShopActions(work, input.shopActions, rng, round);
+      }
+      if (work.phaseKind === 'battle') {
+        // M9 — `B MODULES` mid-battle. This round's combat has already resolved
+        // above, so a purchase here lands in `ownedModules` for NEXT round's
+        // battle-start `ResolvedUnit` freeze (M4): "effects apply next round".
         applyHumanShopActions(work, input.shopActions, rng, round);
       }
       if (work.phaseKind === 'selectPosition') {
