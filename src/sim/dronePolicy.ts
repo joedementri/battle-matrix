@@ -1,28 +1,32 @@
 /*
- * M7 PLACEHOLDER DRONE POLICY — this whole file is replaced in M7, not extended.
+ * M7 — the Ultron-Drone AI policy. One rule for every seat (the plan gives no
+ * per-archetype drone), so this lives in `src/sim/` and is shared, not in
+ * `src/ai/`. It drives any drone whose input stream is `null` — every drone in
+ * a headless `runMatch`, since live capture is M9.
  *
- * M7 ships five real opponent bundles, each with its own drone policy. This is
- * the minimal stand-in, the same pattern `botPolicy.ts` used for the M2
- * placeholder draft: implement ONLY the plan's literal M7 drone rule and leave
- * every other hook (movement, the Encephalo-Ray beam) inert.
- *
- * Plan (M7): "One-Time Damage when >=3 enemies are below 40% HP; One-Time
- * Healing when >=2 allies are below 40%." The thresholds and the 40% fraction
- * are in `authored.ts` (DRONE_POLICY_*).
- *
- * RNG-FREE by design: a purely reactive function of the battle snapshot, so
- * wiring the placeholder into `match.ts` shifts no substream — the M7 isolation
- * invariant ("adding a policy never moves another's rolls") already holds for it.
+ * BEHAVIOUR (`authored.ts` → `DRONE_POLICY`, RNG-free):
+ *   - movement: drift toward the nearest living enemy unit (`combat.ts` clamps
+ *     to the arena bounds and scales by `DRONE_MOVE_SPEED`). The drone flies
+ *     over the fight; it is never a `Unit` and never collides.
+ *   - beam: hold the Encephalo-Ray whenever an enemy is alive. Its whole-battle
+ *     damage is bounded by an ASSERTION (`tests/drone.spec.ts`), not by policy —
+ *     it stays sub-1 % of a Duelist's output and never flips an outcome.
+ *   - One-Time Damage once ≥ `DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD` enemy units
+ *     are below `DRONE_POLICY_LOW_HP_FRACTION`; One-Time Healing once
+ *     ≥ `DRONE_POLICY_HEAL_ALLY_THRESHOLD` allies are. Each fires at most once
+ *     per Battle Phase (`combat.ts` holds the `used` guard) and resets next round.
  *
  * PURE: no DOM, no wall clock, no platform RNG, no crypto, no `ui/` / `render/`.
+ * `Math.sqrt` only — direction is normalised vector math, never angles.
  */
 
 import {
+  DRONE_POLICY,
   DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD,
   DRONE_POLICY_HEAL_ALLY_THRESHOLD,
 } from '../data/authored';
 
-/** The snapshot the placeholder policy reads (built by `combat.ts` each tick). */
+/** The snapshot `combat.ts` builds for the policy each tick. */
 export interface DronePolicyView {
   /** Living enemy units below `DRONE_POLICY_LOW_HP_FRACTION` of max health. */
   readonly enemiesBelowLowHp: number;
@@ -30,6 +34,12 @@ export interface DronePolicyView {
   readonly alliesBelowLowHp: number;
   readonly oneTimeDamageUsed: boolean;
   readonly oneTimeHealUsed: boolean;
+  /** The drone's current position. */
+  readonly x: number;
+  readonly y: number;
+  /** The nearest living enemy unit's position, or `null` if none remain. */
+  readonly targetX: number | null;
+  readonly targetY: number | null;
 }
 
 /** One tick of drone control. Also the shape recorded input decodes to. */
@@ -41,10 +51,22 @@ export interface DroneCommand {
   readonly pressOneTimeHeal: boolean;
 }
 
-export function placeholderDronePolicy(view: DronePolicyView): DroneCommand {
+/** Unit vector from the drone toward `(targetX, targetY)`, or `null` if already there. */
+function steerToward(view: DronePolicyView): DroneCommand['move'] {
+  if (view.targetX === null || view.targetY === null) return null;
+  const dx = view.targetX - view.x;
+  const dy = view.targetY - view.y;
+  const distSq = dx * dx + dy * dy;
+  if (distSq <= 1e-9) return null;
+  const dist = Math.sqrt(distSq);
+  return { x: dx / dist, y: dy / dist };
+}
+
+export function dronePolicy(view: DronePolicyView): DroneCommand {
+  const enemyAlive = view.targetX !== null;
   return {
-    move: null, // M7 owns drone movement
-    beam: false, // M7 owns the beam
+    move: DRONE_POLICY.movement === 'trackNearestEnemyUnit' ? steerToward(view) : null,
+    beam: DRONE_POLICY.holdBeamWhileEnemyAlive && enemyAlive,
     pressOneTimeDamage:
       !view.oneTimeDamageUsed && view.enemiesBelowLowHp >= DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD,
     pressOneTimeHeal:

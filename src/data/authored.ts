@@ -446,22 +446,23 @@ export const DRONE_ONE_TIME_DAMAGE = 120;
 export const DRONE_ONE_TIME_HEALING = 120;
 
 /**
- * Placeholder drone policy — the "low HP" fraction — AUTHORED, from the plan's
- * M7 rule ("below 40 % HP"). M7 replaces the whole placeholder policy.
+ * AI drone policy (M7) — the "low HP" fraction — AUTHORED, from the plan's M7
+ * rule ("below 40 % HP"). The HP fraction under which a unit counts toward the
+ * drone's One-Time thresholds below.
  */
 export const DRONE_POLICY_LOW_HP_FRACTION = 0.4;
 
 /**
- * Placeholder drone policy — fire One-Time Damage when at least this many enemy
+ * AI drone policy (M7) — fire One-Time Damage when at least this many enemy
  * units are below `DRONE_POLICY_LOW_HP_FRACTION` — AUTHORED, from the plan's M7
- * rule ("≥ 3 enemies"). M7 replaces the placeholder.
+ * rule ("≥ 3 enemies").
  */
 export const DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD = 3;
 
 /**
- * Placeholder drone policy — fire One-Time Healing when at least this many
- * allied units are below `DRONE_POLICY_LOW_HP_FRACTION` — AUTHORED, from the
- * plan's M7 rule ("≥ 2 allies"). M7 replaces the placeholder.
+ * AI drone policy (M7) — fire One-Time Healing when at least this many allied
+ * units are below `DRONE_POLICY_LOW_HP_FRACTION` — AUTHORED, from the plan's M7
+ * rule ("≥ 2 allies").
  */
 export const DRONE_POLICY_HEAL_ALLY_THRESHOLD = 2;
 
@@ -475,6 +476,81 @@ export const DRONE_POLICY_HEAL_ALLY_THRESHOLD = 2;
  */
 export const GALACTA_HEALTH_SCALE_PER_ROUND = 0.06;
 export const GALACTA_DPS_SCALE_PER_ROUND = 0.05;
+
+// ===========================================================================
+// AUTHORED — M7 AI opponents
+// ===========================================================================
+
+/**
+ * Seat → archetype assignment for a match — AUTHORED (structural, not a tuning
+ * number). `'seedModuloArchetypeCount'`: seat `i` runs
+ * `ARCHETYPES[(i + masterSeed % 5) % 5]`. Six seats, five archetypes, so seat 5
+ * always doubles seat 0's archetype; *which* archetype that is rotates every
+ * seed, so over many seeds each archetype takes the extra seat equally often
+ * and its win rate is not confounded with a fixed seat or pairing slot. Not
+ * falsifiable by footage (there is no real six-bot lobby); changing it only
+ * reshuffles which archetype sits where.
+ */
+export const AI_SEAT_ROTATION = 'seedModuloArchetypeCount' as const;
+
+/**
+ * Per-archetype economy / build knobs — AUTHORED bot tuning. Re-tuned ONLY
+ * against the M7 distribution gate, never against hero stats (that is M11).
+ * Each value is the plan's M7 table wording made numeric, then fitted so no
+ * archetype wins < 5 % or > 50 % of 100 seeded AI-only matches:
+ *   greedyBankerHoldTokens     35 — the reserve it keeps while interest still
+ *        compounds. The plan's "buys only at 50+ tokens" proved a pure losing
+ *        hold in the M7 module meta (dead before it could cash in); 35 keeps a
+ *        reserve larger than any other archetype's while clearing the 5 % floor.
+ *   greedyBankerCashInRound     9 — from here it drops the reserve and cashes
+ *        the fat bank into modules (interest has done its compounding work).
+ *   protocolRusherTargetLevel   3 — "forces one protocol to L3".
+ *   equilibriumPuristHoldTokens 25 — "balanced": a one-to-two-buy buffer over
+ *        the 15 base income.
+ *   streakRiderWinSaveTokens    22 — "rides loss streaks": the reserve it holds
+ *        while winning; on a loss streak it spends toward 0.
+ *   adaptiveHoldUntilRound       6 — "interest to r8, then spend" — tuned in a
+ *        round earlier so the compounding module race does not run away first.
+ *   shopRefreshBudget            2 — max `REFRESH`es per round for the
+ *        archetypes that dig for a card (all but Greedy Banker).
+ * Falsified only by the gate itself leaving the 5–50 % win-rate band.
+ */
+export const AI_ARCHETYPE_TUNING = {
+  greedyBankerHoldTokens: 35,
+  greedyBankerCashInRound: 9,
+  protocolRusherTargetLevel: 3,
+  equilibriumPuristHoldTokens: 25,
+  streakRiderWinSaveTokens: 22,
+  adaptiveHoldUntilRound: 6,
+  shopRefreshBudget: 2,
+} as const;
+
+/**
+ * The `attackRange` (arena units) at or below which a Duelist deploys as a
+ * melee flanker (front-minus-one row, outer columns) rather than a ranged
+ * back-liner — AUTHORED. Extracted from `combat.ts`'s pre-M7 formation
+ * heuristic, which used the same literal 8; `board.ts` / `ai/deploy.ts` and
+ * `combat.ts` now share this one constant. Falsified by footage establishing a
+ * different melee/ranged split among Duelists on the deploy grid.
+ */
+export const DEPLOY_MELEE_DUELIST_RANGE_MAX = 8;
+
+/**
+ * The shared Ultron-Drone AI policy (M7) — AUTHORED behaviour, RNG-free.
+ *   movement: 'trackNearestEnemyUnit' — the drone drifts toward the nearest
+ *        living enemy unit at `DRONE_MOVE_SPEED`; it flies over the fight and
+ *        never collides with anything.
+ *   holdBeamWhileEnemyAlive: true — a bot holds LMB continuously. The
+ *        Encephalo-Ray's whole-battle damage is bounded by an ASSERTION, not
+ *        by this flag (see `ENCEPHALO_RAY_DPS`) — it stays sub-1 % of a
+ *        Duelist's output and never flips an outcome. Digest-affecting only.
+ * NOT per-archetype: the plan gives exactly one drone rule for every seat.
+ * Falsified by footage of a materially different AI drone behaviour.
+ */
+export const DRONE_POLICY = {
+  movement: 'trackNearestEnemyUnit',
+  holdBeamWhileEnemyAlive: true,
+} as const;
 
 // ===========================================================================
 // AUTHORED, but stored elsewhere by the ledger's deliberate exception
@@ -667,11 +743,19 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   DRONE_ONE_TIME_HEALING:
     'AUTHORED (M6). E One-Time Healing, flat, per living allied unit; symmetric with DRONE_ONE_TIME_DAMAGE. Falsified as DRONE_ONE_TIME_DAMAGE.',
   DRONE_POLICY_LOW_HP_FRACTION:
-    'AUTHORED (M6), from the plan\'s M7 drone rule ("below 40 % HP"). Used only by the placeholder drone policy, which M7 replaces.',
+    'AUTHORED (M7), the plan\'s M7 drone rule ("below 40 % HP"): the HP fraction under which a unit counts toward the drone\'s One-Time thresholds. Falsified by footage pinning the AI drone\'s trigger to a different fraction.',
   DRONE_POLICY_DAMAGE_ENEMY_THRESHOLD:
-    'AUTHORED (M6), from the plan\'s M7 drone rule ("≥ 3 enemies below 40 %"). Placeholder-policy only; M7 replaces it.',
+    'AUTHORED (M7), the plan\'s M7 drone rule: the drone fires One-Time Damage once ≥ this many enemy units are below DRONE_POLICY_LOW_HP_FRACTION. Falsified by footage of the AI drone firing it at a different count.',
   DRONE_POLICY_HEAL_ALLY_THRESHOLD:
-    'AUTHORED (M6), from the plan\'s M7 drone rule ("≥ 2 allies below 40 %"). Placeholder-policy only; M7 replaces it.',
+    'AUTHORED (M7), the plan\'s M7 drone rule: the drone fires One-Time Healing once ≥ this many allied units are below DRONE_POLICY_LOW_HP_FRACTION. Falsified by footage of the AI drone firing it at a different count.',
+  AI_SEAT_ROTATION:
+    'AUTHORED (M7, structural). Seat i → ARCHETYPES[(i + masterSeed % 5) % 5]; seat 5 doubles seat 0, rotating by seed so no archetype is confounded with a fixed seat. Not footage-falsifiable (no real six-bot lobby); changing it reshuffles which archetype sits where.',
+  AI_ARCHETYPE_TUNING:
+    'AUTHORED (M7). Per-archetype economy knobs, the plan\'s M7 table wording made numeric then fitted to the 100-match distribution gate: Greedy Banker reserve 35 (the plan\'s "50+" is a losing hold in the M7 module meta) with a round-9 cash-in; Onslaught/Equilibrium L3 target; Equilibrium Purist 25-token buffer; Streak Rider 22-token win-reserve; Adaptive light-buffer-then-spend from round 6; 2 REFRESHes/round. Bot tuning only — re-tuned against the gate, never against hero stats (M11). Falsified by the gate leaving the 5–50 % band.',
+  DEPLOY_MELEE_DUELIST_RANGE_MAX:
+    'AUTHORED (M7). attackRange ≤ this ⇒ a Duelist deploys as a melee flanker, else a ranged back-liner. Extracted from combat.ts\'s pre-M7 formation cutoff (same literal 8) so board.ts / ai and combat.ts share one source. Falsified by footage of a different Duelist melee/ranged deploy split.',
+  DRONE_POLICY:
+    'AUTHORED (M7). The shared, RNG-free AI drone policy: track the nearest enemy unit, hold the Encephalo-Ray while any enemy lives (its damage is bounded by an assertion, not this flag), fire the two One-Time abilities at the DRONE_POLICY_* thresholds. One rule for every seat (the plan gives no per-archetype drone). Falsified by footage of a materially different AI drone.',
   GALACTA_HEALTH_SCALE_PER_ROUND:
     'AUTHORED (M6). Galacta Bot health multiplier = 1 + this × (round − 1), on top of the larger per-tier composition. Round 1 = ×1.0 (comfortable), round 21 = ×2.2 (threatening). M11 re-tunes. Falsified by a different Practice difficulty curve.',
   GALACTA_DPS_SCALE_PER_ROUND:

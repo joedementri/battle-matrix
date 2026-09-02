@@ -11,7 +11,7 @@ import {
   planMatchupDrones,
 } from '../src/sim/drone';
 import type { DroneInputStream, DroneSpec } from '../src/sim/drone';
-import { placeholderDronePolicy } from '../src/sim/dronePolicy';
+import { dronePolicy } from '../src/sim/dronePolicy';
 import { RngStream } from '../src/sim/rng';
 import type { SideModules } from '../src/sim/stats';
 import type { OwnedModule, ProtocolLevels } from '../src/sim/modules';
@@ -66,8 +66,16 @@ function droneSpec(input: DroneInputStream | null, health = 50): DroneSpec {
   return { side: 0, playerId: 0, colour: 'Blue', health, input };
 }
 
+/**
+ * Ticks on which the drone fired a ONE-TIME ability. The M7 drone policy also
+ * holds the Encephalo-Ray, which queues a `source: 'drone'` event of ~0.0007
+ * damage every tick, so filter to the flat `DRONE_ONE_TIME_*` magnitude (≥ 1)
+ * to isolate the bursts from the beam trickle.
+ */
 const droneBursts = (trace: ReturnType<typeof simulateBattle>): number[] =>
-  trace.damageLog!.filter((e) => e.srcUnitId === -1 && e.source === 'drone').map((e) => e.tick);
+  trace
+    .damageLog!.filter((e) => e.srcUnitId === -1 && e.source === 'drone' && e.amount >= 1)
+    .map((e) => e.tick);
 
 // ---------------------------------------------------------------------------
 // 1. One-time abilities: at most once per Battle Phase, reset next round
@@ -355,21 +363,29 @@ describe('quantized movement', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Placeholder drone policy (M7 replaces this)
+// 9. The M7 drone policy — thresholds, used-guard, tracking movement, beam
 // ---------------------------------------------------------------------------
 
-describe('placeholder drone policy', () => {
-  const base = { oneTimeDamageUsed: false, oneTimeHealUsed: false };
+describe('M7 drone policy', () => {
+  const base = {
+    oneTimeDamageUsed: false,
+    oneTimeHealUsed: false,
+    x: 0,
+    y: 0,
+    targetX: 10,
+    targetY: 0,
+  };
 
   it('fires One-Time Damage only at ≥ 3 low enemies, One-Time Heal only at ≥ 2 low allies', () => {
-    expect(placeholderDronePolicy({ ...base, enemiesBelowLowHp: 3, alliesBelowLowHp: 0 }).pressOneTimeDamage).toBe(true);
-    expect(placeholderDronePolicy({ ...base, enemiesBelowLowHp: 2, alliesBelowLowHp: 0 }).pressOneTimeDamage).toBe(false);
-    expect(placeholderDronePolicy({ ...base, enemiesBelowLowHp: 0, alliesBelowLowHp: 2 }).pressOneTimeHeal).toBe(true);
-    expect(placeholderDronePolicy({ ...base, enemiesBelowLowHp: 0, alliesBelowLowHp: 1 }).pressOneTimeHeal).toBe(false);
+    expect(dronePolicy({ ...base, enemiesBelowLowHp: 3, alliesBelowLowHp: 0 }).pressOneTimeDamage).toBe(true);
+    expect(dronePolicy({ ...base, enemiesBelowLowHp: 2, alliesBelowLowHp: 0 }).pressOneTimeDamage).toBe(false);
+    expect(dronePolicy({ ...base, enemiesBelowLowHp: 0, alliesBelowLowHp: 2 }).pressOneTimeHeal).toBe(true);
+    expect(dronePolicy({ ...base, enemiesBelowLowHp: 0, alliesBelowLowHp: 1 }).pressOneTimeHeal).toBe(false);
   });
 
-  it('never re-fires a spent ability, and leaves movement / beam to M7', () => {
-    const cmd = placeholderDronePolicy({
+  it('never re-fires a spent ability', () => {
+    const cmd = dronePolicy({
+      ...base,
       enemiesBelowLowHp: 6,
       alliesBelowLowHp: 6,
       oneTimeDamageUsed: true,
@@ -377,6 +393,33 @@ describe('placeholder drone policy', () => {
     });
     expect(cmd.pressOneTimeDamage).toBe(false);
     expect(cmd.pressOneTimeHeal).toBe(false);
+  });
+
+  it('steers a unit vector toward the nearest enemy and holds the beam while one lives', () => {
+    const cmd = dronePolicy({
+      ...base,
+      enemiesBelowLowHp: 0,
+      alliesBelowLowHp: 0,
+      x: 0,
+      y: 0,
+      targetX: 3,
+      targetY: 4,
+    });
+    expect(cmd.move).not.toBeNull();
+    expect(Math.sqrt(cmd.move!.x * cmd.move!.x + cmd.move!.y * cmd.move!.y)).toBeCloseTo(1, 9);
+    expect(cmd.move!.x).toBeCloseTo(0.6, 9);
+    expect(cmd.move!.y).toBeCloseTo(0.8, 9);
+    expect(cmd.beam).toBe(true);
+  });
+
+  it('holds position and drops the beam when no enemy remains', () => {
+    const cmd = dronePolicy({
+      ...base,
+      enemiesBelowLowHp: 0,
+      alliesBelowLowHp: 0,
+      targetX: null,
+      targetY: null,
+    });
     expect(cmd.move).toBeNull();
     expect(cmd.beam).toBe(false);
   });

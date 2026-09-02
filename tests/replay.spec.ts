@@ -43,51 +43,62 @@ function replay(seed: number): ReplayOutcome {
   };
 }
 
-// ---- COMMITTED (regenerated 2026-09-01 — M6: Galacta Bots + Ultron Drones -----
-//      wired into the resolver. Real Galacta waves replace the M5 PvE self-mirror
-//      placeholder; every battle now hosts N policy-driven drones whose two
-//      one-time abilities swing PvP outcomes. Deliberate regeneration per the M6
-//      plan's Integration note — no determinism test was weakened. -------------
+// ---- COMMITTED (regenerated 2026-09-02 — M7: AI opponents) ------------------
+//      M7 wires the module economy + a 6×4 board-deployment model into the
+//      match loop and replaces the placeholder bot / drone policies with the
+//      five real archetypes and the shared drone policy. These `runMatch(seed,
+//      [], resolver)` replays give the human seat NO actions, so it now sits
+//      passive (no purchases, engine formation) while all five bots draft,
+//      spend, deploy and fly a tracking drone — the human loses in every seed
+//      here, which is the point of the change, not a regression. Matches also
+//      end a few rounds sooner: bots with modules kill faster.
+//
+//      Verified in two steps before this table was blessed: (1) the state-shape
+//      + shop-open change alone left every seed's winner / round / placements /
+//      boundary count identical to M6 (only `finalStateHash` moved, from the new
+//      PlayerState fields); (2) the archetypes actually playing produced the
+//      values below. No determinism guarantee was weakened —
+//      `tests/determinism.spec.ts` is untouched and green.
 const COMMITTED: readonly ReplayOutcome[] = [
   {
     seed: 11,
-    winnerId: 5,
-    finalRound: 30,
-    placements: [3, 2, 4, 5, 6, 1],
-    boundaryCount: 96,
-    finalStateHash: 'f3e24a916f25edbdcd1fdf9a9ec3063f',
+    winnerId: 1,
+    finalRound: 24,
+    placements: [6, 1, 3, 5, 4, 2],
+    boundaryCount: 78,
+    finalStateHash: '06cbb81b66b5f399d66fc8e42fdc16a2',
   },
   {
     seed: 2024,
-    winnerId: 2,
-    finalRound: 26,
-    placements: [3, 4, 1, 6, 2, 5],
-    boundaryCount: 84,
-    finalStateHash: '7027687527a7b3fdaee35376d6ed1448',
+    winnerId: 1,
+    finalRound: 28,
+    placements: [5, 1, 3, 6, 4, 2],
+    boundaryCount: 90,
+    finalStateHash: 'e08b859142dee2f1e72519bb95e5318c',
   },
   {
     seed: 424242,
-    winnerId: 0,
+    winnerId: 2,
     finalRound: 29,
-    placements: [1, 5, 6, 4, 3, 2],
+    placements: [6, 2, 1, 4, 5, 3],
     boundaryCount: 93,
-    finalStateHash: 'a588309edd11c4e931d6187ee31650e5',
+    finalStateHash: '477a76e9c496ff9471e9d0f52c184cb7',
   },
   {
     seed: 918273,
-    winnerId: 0,
-    finalRound: 34,
-    placements: [1, 3, 5, 2, 4, 6],
-    boundaryCount: 108,
-    finalStateHash: 'fa451af2100dd0f7808a4a3d2b62900d',
+    winnerId: 1,
+    finalRound: 27,
+    placements: [6, 1, 5, 2, 3, 4],
+    boundaryCount: 87,
+    finalStateHash: '42a0634361d36ceb9675e0f7e5d374e6',
   },
   {
     seed: 12648430,
-    winnerId: 4,
-    finalRound: 29,
-    placements: [2, 5, 4, 3, 1, 6],
-    boundaryCount: 93,
-    finalStateHash: '45af21400b52741901852ccf51f003d6',
+    winnerId: 1,
+    finalRound: 26,
+    placements: [6, 1, 3, 4, 5, 2],
+    boundaryCount: 84,
+    finalStateHash: 'b0693dc7f2fa475014eb80525d65782f',
   },
 ];
 // ---- /COMMITTED --------------------------------------------------------------

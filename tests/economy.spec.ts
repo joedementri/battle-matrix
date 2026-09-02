@@ -566,23 +566,34 @@ function forcedLoserResolver(loserId: number): CombatResolver {
 }
 
 describe('economy wired into match.ts', () => {
-  it('players start at 10; the 1-1 boundary still reads 10; round 2 income lands at 2-1', () => {
+  it('start at 10; round 1 pays no income; round-2 income lands per previewIncome', () => {
+    // M7 wires the shop into the Module Draw phase, so bots may spend from round
+    // 1 (e.g. the Protocol Rusher dumps its 10 starting tokens). The economy
+    // engine is unchanged; this asserts the INCOME wiring via each player's
+    // spend-agnostic `tokenLedger.earned`, plus the literal balances on the
+    // human seat, which takes no shop actions.
     expect(STARTING_TOKENS).toBe(10);
     for (const seed of [1, 7, 2024]) {
       const res = runMatch(seed, [], stub());
+      const human = res.boundaries[0]!.state.players.findIndex((p) => p.isHuman);
 
       expect(res.boundaries[0]!.state.players.every((p) => p.tokens === 10), `seed ${seed} draft`).toBe(true);
 
       const oneOne = res.boundaries.find((b) => b.label === '1-1')!;
-      expect(oneOne.state.players.every((p) => p.tokens === 10), `seed ${seed} 1-1`).toBe(true);
+      expect(oneOne.state.players[human]!.tokens, `seed ${seed} 1-1 human`).toBe(10);
+      expect(
+        oneOne.state.players.every((p) => p.tokenLedger.earned === 10),
+        `seed ${seed} 1-1 no income earned`,
+      ).toBe(true);
 
       const oneFour = res.boundaries.find((b) => b.label === '1-4')!; // end of the Practice round
       const twoOne = res.boundaries.find((b) => b.label === '2-1')!;
       for (const p of twoOne.state.players) {
         const grant = previewIncome(oneFour.state, p.id).total;
-        expect(p.tokens - oneFour.state.players[p.id]!.tokens, `seed ${seed} p${p.id} grant`).toBe(grant);
-        expect(p.tokens, `seed ${seed} p${p.id} @2-1`).toBe(26); // 10 + 15 + floor(10/10) + 0
+        const earnedDelta = p.tokenLedger.earned - oneFour.state.players[p.id]!.tokenLedger.earned;
+        expect(earnedDelta, `seed ${seed} p${p.id} round-2 income into ledger`).toBe(grant);
       }
+      expect(twoOne.state.players[human]!.tokens, `seed ${seed} 2-1 human`).toBe(26); // 10 + 15 + floor(10/10)
     }
   });
 

@@ -21,6 +21,7 @@ import {
   PLAYER_COUNT,
   PRACTICE_REWARD_COUNTS,
   PRACTICE_ROUNDS,
+  SHOP_REFRESH_COST,
   STARTING_HEALTH,
   STARTING_TOKENS,
 } from '../data/constants';
@@ -36,13 +37,32 @@ import {
 import heroesJson from '../data/heroes.json';
 import type { Role } from '../data/types';
 
+import { balancedDraft } from '../ai/draft';
+import { resolvePolicy, seatArchetypes } from '../ai/archetypes';
+import { ARCHETYPES } from '../ai/types';
+import type { AiPolicy, ArchetypeName } from '../ai/types';
+
 import { RngStream } from './rng';
 import type { RngSnapshot, Substream } from './rng';
-import { placeholderDraftLineup } from './botPolicy';
+import { isValidDeployment } from './board';
+import type { DeployCell, Deployment } from './board';
 import { assignDroneColours, planMatchupDrones } from './drone';
 import type { DroneColour } from './drone';
 import { applyBattleResolution, applyRoundStartIncome } from './economy';
-import type { StrengthenInventory } from './modules';
+import {
+  accountLevels,
+  buyModule,
+  canRefreshShop,
+  levelsFromXp,
+  lockShop,
+  openShop,
+  refreshShop,
+  sellModule,
+  spendShopRefresh,
+  unlockShop,
+  zeroProtocolXp,
+} from './modules';
+import type { ModuleAccount, OwnedModule, ProtocolXp, ShopState, StrengthenInventory } from './modules';
 import {
   autoFillStrengthenReward,
   grantStrengthenPicks,
@@ -51,6 +71,7 @@ import {
   refreshStrengthenReward,
   strengthenOwnedIds,
 } from './practice';
+import type { SideModules } from './stats';
 import { hashState } from './types';
 import type {
   Action,
@@ -177,6 +198,12 @@ interface WorkPlayer {
   streakKind: StreakKind;
   droneColour: DroneColour;
   strengthen: StrengthenInventory;
+  // M7 — module economy + deployment (plain JSON on the public state).
+  ownedModules: OwnedModule[];
+  protocolXp: ProtocolXp;
+  shop: ShopState | null;
+  tokenLedger: { earned: number; spent: number; refunded: number };
+  deployment: DeployCell[] | null;
 }
 
 interface WorkMatchup {
@@ -241,6 +268,19 @@ function cloneState(w: WorkState): MatchState {
         ),
         selectable: p.strengthen.selectable.slice(),
       },
+      ownedModules: p.ownedModules.map((o) => ({ moduleId: o.moduleId, stars: o.stars })),
+      protocolXp: { ...p.protocolXp },
+      shop:
+        p.shop === null
+          ? null
+          : {
+              round: p.shop.round,
+              locked: p.shop.locked,
+              slots: p.shop.slots.map((c) => (c === null ? null : { ...c })),
+            },
+      tokenLedger: { ...p.tokenLedger },
+      deployment:
+        p.deployment === null ? null : p.deployment.map((c) => ({ col: c.col, row: c.row })),
     })),
     matchups: w.matchups.map((m) => ({
       kind: m.kind,
@@ -259,13 +299,55 @@ function cloneState(w: WorkState): MatchState {
 // Setup
 // ---------------------------------------------------------------------------
 
-function initState(seed: number): WorkState {
+/**
+ * Resolve `RunMatchOptions.ai` into a per-seat AI policy map + the human seat
+ * id (`-1` when every seat is a bot). Seats not pinned by an explicit map fall
+ * back to the seed rotation (`seatArchetypes`); seat 0 stays human unless
+ * `'aiOnly'`, or an explicit map, names it.
+ */
+function resolveSeatPolicies(
+  masterSeed: number,
+  ai: RunMatchOptions['ai'],
+): { policies: ReadonlyMap<number, AiPolicy>; humanSeat: number } {
+  const rotation = seatArchetypes(masterSeed);
+  const explicit: Readonly<Record<number, string>> | null =
+    ai !== undefined && ai !== 'aiOnly' ? ai : null;
+
+  const nameFor = (id: number): ArchetypeName | null => {
+    if (explicit !== null) {
+      const pinned = explicit[id];
+      if (pinned !== undefined) {
+        if (!(ARCHETYPES as readonly string[]).includes(pinned)) {
+          throw new RangeError(`runMatch(): unknown AI archetype "${pinned}" for seat ${id}`);
+        }
+        return pinned as ArchetypeName;
+      }
+      return id === 0 ? null : (rotation[id] ?? null);
+    }
+    if (ai === 'aiOnly') return rotation[id] ?? null;
+    return id === 0 ? null : (rotation[id] ?? null);
+  };
+
+  const policies = new Map<number, AiPolicy>();
+  let humanSeat = -1;
+  for (let id = 0; id < PLAYER_COUNT; id++) {
+    const name = nameFor(id);
+    if (name === null) {
+      if (humanSeat === -1) humanSeat = id;
+    } else {
+      policies.set(id, resolvePolicy(name));
+    }
+  }
+  return { policies, humanSeat };
+}
+
+function initState(seed: number, humanSeat: number): WorkState {
   const players: WorkPlayer[] = [];
   for (let i = 0; i < PLAYER_COUNT; i++) {
     players.push({
       id: i,
       name: `Player ${i + 1}`,
-      isHuman: i === 0,
+      isHuman: i === humanSeat,
       alive: true,
       health: STARTING_HEALTH,
       eliminationHealth: null,
@@ -286,6 +368,14 @@ function initState(seed: number): WorkState {
       // Overwritten by `assignDroneColours` right after pool assignment.
       droneColour: 'Default',
       strengthen: { equipped: {}, selectable: [] },
+      // M7 — module economy. `tokenLedger.earned` seeds with the starting
+      // tokens so `conserves` (earned + refunded === spent + tokens) holds
+      // from the draft boundary on.
+      ownedModules: [],
+      protocolXp: zeroProtocolXp(),
+      shop: null,
+      tokenLedger: { earned: STARTING_TOKENS, spent: 0, refunded: 0 },
+      deployment: null,
     });
   }
   return {
@@ -331,12 +421,194 @@ function isValidLineup(lineup: readonly string[], pool: readonly string[]): bool
 }
 
 // ---------------------------------------------------------------------------
+// M7 — module economy adapter + ledger
+// ---------------------------------------------------------------------------
+
+/**
+ * Project a `WorkPlayer` into the `ModuleAccount` shape `modules.ts` /
+ * `economy.ts` already operate on. `owned` and `protocolXp` are shared BY
+ * REFERENCE — `buyModule` / `sellModule` mutate them in place, writing straight
+ * through to the player — so only `tokens` and the three ledger counters need
+ * `commitAccount` to copy back. `PlayerState.tokens` therefore stays the one
+ * balance; there are never two.
+ */
+function asAccount(p: WorkPlayer): ModuleAccount {
+  return {
+    tokens: p.tokens,
+    owned: p.ownedModules,
+    protocolXp: p.protocolXp,
+    earned: p.tokenLedger.earned,
+    spent: p.tokenLedger.spent,
+    refunded: p.tokenLedger.refunded,
+  };
+}
+
+function commitAccount(p: WorkPlayer, acc: ModuleAccount): void {
+  p.tokens = acc.tokens;
+  p.tokenLedger = { earned: acc.earned, spent: acc.spent, refunded: acc.refunded };
+}
+
+/**
+ * Fold each player's token delta from an economy CREDIT-only step
+ * (`applyRoundStartIncome`, `applyBattleResolution`) into their ledger's
+ * `earned`, so `conserves` stays true at every boundary. Those two functions
+ * only ever add to `tokens`; module debits / refunds go through `asAccount`.
+ */
+function creditLedger(work: WorkState, before: readonly number[]): void {
+  work.players.forEach((p, i) => {
+    const delta = p.tokens - (before[i] ?? 0);
+    if (delta !== 0) {
+      p.tokenLedger = { ...p.tokenLedger, earned: p.tokenLedger.earned + delta };
+    }
+  });
+}
+
+/** This player's owned Base Modules + protocol levels, as combat consumes them. */
+function sideModulesOf(p: WorkPlayer): SideModules {
+  return {
+    owned: p.ownedModules.map((o) => ({ moduleId: o.moduleId, stars: o.stars })),
+    protocolLevels: levelsFromXp(p.protocolXp),
+  };
+}
+
+/** A fresh copy of this player's board deployment (or `null` = engine formation). */
+function deploymentOf(p: WorkPlayer): Deployment | null {
+  return p.deployment === null ? null : p.deployment.map((c) => ({ col: c.col, row: c.row }));
+}
+
+/**
+ * Open every living player's shop for `round` from their own per-round
+ * substream (`shop:<id>#round`), honouring `SHOP_LOCK_BEHAVIOUR` carry-over
+ * from `p.shop`. Runs on the Module Draw phase, right after round-start income.
+ * A bot then runs its archetype's shop turn against the same substream —
+ * per-player and per-round, so adding a bot or changing one's archetype cannot
+ * shift another seat's rolls (the M7 isolation invariant).
+ */
+function openShopsForRound(
+  work: WorkState,
+  rng: RngStream,
+  round: number,
+  policies: ReadonlyMap<number, AiPolicy>,
+): void {
+  for (const p of work.players) {
+    if (!p.alive) continue;
+    const sub = rng.stream(`shop:${p.id}`, round);
+    const acc = asAccount(p);
+    let shop = openShop(round, accountLevels(acc), acc.owned, sub, p.shop);
+
+    const policy = policies.get(p.id);
+    if (policy !== undefined) {
+      shop = policy.runShopTurn({
+        round,
+        account: acc,
+        shop,
+        rng: sub,
+        streakKind: p.streakKind,
+        streak: p.streak,
+        lineup: p.lineup.slice(),
+        roleOf: ROLE_OF,
+      });
+    }
+
+    commitAccount(p, acc);
+    p.shop = shop;
+  }
+}
+
+/** The lineup of the last living opponent this player faced (`null` if none). */
+function lastOpponentLineupOf(work: WorkState, p: WorkPlayer): readonly string[] | null {
+  for (let i = p.recentOpponents.length - 1; i >= 0; i--) {
+    const id = p.recentOpponents[i]!;
+    if (id >= 0) return work.players[id]!.lineup.slice();
+  }
+  return null;
+}
+
+/**
+ * Each bot places its lineup on the 6×4 board from its own per-round substream
+ * (`ai:<id>:deploy#round`). The human keeps `deployment = null` (the engine
+ * formation) unless a `deploy` action is supplied.
+ */
+function runBotDeploys(
+  work: WorkState,
+  rng: RngStream,
+  round: number,
+  policies: ReadonlyMap<number, AiPolicy>,
+): void {
+  for (const p of work.players) {
+    if (!p.alive) continue;
+    const policy = policies.get(p.id);
+    if (policy === undefined) continue;
+    const cells = policy.deploy({
+      lineup: p.lineup.slice(),
+      roleOf: ROLE_OF,
+      protocolLevels: levelsFromXp(p.protocolXp),
+      ownedModules: p.ownedModules.map((o) => ({ moduleId: o.moduleId, stars: o.stars })),
+      lastOpponentLineup: lastOpponentLineupOf(work, p),
+      rng: rng.stream(`ai:${p.id}:deploy`, round),
+    });
+    p.deployment = cells.map((c) => ({ col: c.col, row: c.row }));
+  }
+}
+
+/** Apply the human seat's Module Draw actions to their open shop / account. */
+function applyHumanShopActions(
+  work: WorkState,
+  actions: readonly HumanShopAction[],
+  rng: RngStream,
+  round: number,
+): void {
+  if (actions.length === 0) return;
+  const p = work.players.find((pp) => pp.isHuman);
+  if (p === undefined || !p.alive || p.shop === null) return;
+  const acc = asAccount(p);
+  let shop: ShopState = p.shop;
+  for (const a of actions) {
+    if (a.type === 'buyModule') {
+      // `buyModule` refuses an illegal ask without changing state — the human
+      // seat is free to fumble; a bot's policy is not (M7).
+      shop = buyModule(acc, shop, a.slot).shop;
+    } else if (a.type === 'sellModule') {
+      sellModule(acc, a.moduleId);
+    } else if (a.type === 'refreshShop') {
+      if (
+        canRefreshShop(shop) &&
+        acc.tokens >= SHOP_REFRESH_COST &&
+        spendShopRefresh(acc, SHOP_REFRESH_COST)
+      ) {
+        shop = refreshShop(shop, accountLevels(acc), acc.owned, rng.stream(`shop:${p.id}`, round));
+      }
+    } else {
+      shop = shop.locked ? unlockShop(shop) : lockShop(shop);
+    }
+  }
+  commitAccount(p, acc);
+  p.shop = shop;
+}
+
+/** Apply the human seat's `deploy` action, if the deployment is legal. */
+function applyHumanDeployAction(work: WorkState, cells: readonly DeployCell[] | null): void {
+  if (cells === null) return;
+  const p = work.players.find((pp) => pp.isHuman);
+  if (p === undefined || !p.alive) return;
+  if (!isValidDeployment(cells, p.lineup.length)) return;
+  p.deployment = cells.map((c) => ({ col: c.col, row: c.row }));
+}
+
+// ---------------------------------------------------------------------------
 // Action consumption
 // ---------------------------------------------------------------------------
 
 interface Cursor {
   i: number;
 }
+
+/** The human seat's Module Draw actions, collected in order for the phase. */
+type HumanShopAction =
+  | { readonly type: 'buyModule'; readonly slot: number }
+  | { readonly type: 'sellModule'; readonly moduleId: string }
+  | { readonly type: 'refreshShop' }
+  | { readonly type: 'lockShop' };
 
 interface PhaseInput {
   /** true = player 0 confirmed; false = timed out / ran out of actions. */
@@ -347,18 +619,33 @@ interface PhaseInput {
   readonly rewardRefreshes: number;
   /** `selectReward` module ids seen this phase, in order. Reward phase only. */
   readonly rewardPicks: readonly string[];
+  /** `buyModule` / `sellModule` / `refreshShop` / `lockShop` seen this phase, in order. Module Draw only. */
+  readonly shopActions: readonly HumanShopAction[];
+  /** The last `deploy` action's cells this phase. Select Position only. */
+  readonly deployCells: readonly DeployCell[] | null;
 }
 
 /**
  * Consume actions for the current phase: apply any `selectLineup`, collect any
- * `selectReward` / `refreshReward` (the reward phase acts on them), then stop on
- * the first `confirmPhase` (confirmed) or `advanceTimer` (timed out). Running out
- * of actions is an implicit timeout. Unrecognised action types are skipped.
+ * `selectReward` / `refreshReward` / shop / `deploy` action (the owning phase
+ * acts on them), then stop on the first `confirmPhase` (confirmed) or
+ * `advanceTimer` (timed out). Running out of actions is an implicit timeout.
+ * Unrecognised action types are skipped.
  */
 function consumeUntilPhaseEnd(actions: readonly Action[], cur: Cursor): PhaseInput {
   let lineup: readonly string[] | null = null;
   let rewardRefreshes = 0;
   const rewardPicks: string[] = [];
+  const shopActions: HumanShopAction[] = [];
+  let deployCells: readonly DeployCell[] | null = null;
+  const done = (confirmed: boolean): PhaseInput => ({
+    confirmed,
+    lineup,
+    rewardRefreshes,
+    rewardPicks,
+    shopActions,
+    deployCells,
+  });
   while (cur.i < actions.length) {
     const act = actions[cur.i]!;
     cur.i++;
@@ -374,11 +661,31 @@ function consumeUntilPhaseEnd(actions: readonly Action[], cur: Cursor): PhaseInp
       rewardPicks.push(act.moduleId);
       continue;
     }
-    if (act.type === 'confirmPhase') return { confirmed: true, lineup, rewardRefreshes, rewardPicks };
-    if (act.type === 'advanceTimer') return { confirmed: false, lineup, rewardRefreshes, rewardPicks };
+    if (act.type === 'buyModule') {
+      shopActions.push({ type: 'buyModule', slot: act.slot });
+      continue;
+    }
+    if (act.type === 'sellModule') {
+      shopActions.push({ type: 'sellModule', moduleId: act.moduleId });
+      continue;
+    }
+    if (act.type === 'refreshShop') {
+      shopActions.push({ type: 'refreshShop' });
+      continue;
+    }
+    if (act.type === 'lockShop') {
+      shopActions.push({ type: 'lockShop' });
+      continue;
+    }
+    if (act.type === 'deploy') {
+      deployCells = act.cells.map((c) => ({ col: c.col, row: c.row }));
+      continue;
+    }
+    if (act.type === 'confirmPhase') return done(true);
+    if (act.type === 'advanceTimer') return done(false);
     // future action types: skip and keep consuming
   }
-  return { confirmed: false, lineup, rewardRefreshes, rewardPicks };
+  return done(false);
 }
 
 // ---------------------------------------------------------------------------
@@ -517,35 +824,53 @@ function combatContextFor(
     lineup: a.lineup.slice(),
     isPhantom: false,
     isGalactaBots: false,
+    // M7 — this player's resolved modules + board deployment ride on the
+    // context (the resolver takes `baseOpts` once and cannot be re-parametrised
+    // per matchup). `SimulateOptions` still overrides for M5 direct tests.
+    modules: sideModulesOf(a),
+    deployment: deploymentOf(a),
   };
 
   let sideB: CombatContext['sideB'];
   if (m.kind === 'pve') {
-    sideB = { playerId: -1, lineup: [], isPhantom: false, isGalactaBots: true };
+    sideB = {
+      playerId: -1,
+      lineup: [],
+      isPhantom: false,
+      isGalactaBots: true,
+      modules: null,
+      deployment: null,
+    };
   } else if (m.kind === 'phantom') {
+    // An eliminated player's state is frozen at elimination, so their current
+    // modules / deployment ARE their phantom modules / deployment.
     const owner = work.players[m.b]!;
     sideB = {
       playerId: m.b,
       lineup: (owner.phantomLineup ?? owner.lineup).slice(),
       isPhantom: true,
       isGalactaBots: false,
+      modules: sideModulesOf(owner),
+      deployment: deploymentOf(owner),
     };
   } else {
-    // pvp or mirror — a copy of the opponent/source's living lineup
+    // pvp or mirror — a copy of the opponent/source's living lineup + build
     const other = work.players[m.b]!;
     sideB = {
       playerId: m.b,
       lineup: other.lineup.slice(),
       isPhantom: false,
       isGalactaBots: false,
+      modules: sideModulesOf(other),
+      deployment: deploymentOf(other),
     };
   }
 
   // Drones (M6). Side A is always a living player. `planMatchupDrones` applies
   // the AUTHORED mirror/phantom calls (mirror gets a policy opponent drone;
   // phantom and PvE do not). No recorded input in the headless action vocabulary
-  // yet (M9 owns live capture), so every drone runs on the M7-placeholder policy
-  // — the same pattern `botPolicy.ts` uses for both bots and the human draft.
+  // yet (M9 owns live capture), so every drone runs on the shared M7 drone
+  // policy (`dronePolicy.ts`).
   const opponentForDrone =
     m.kind === 'pvp' || m.kind === 'mirror' || m.kind === 'phantom' ? work.players[m.b]! : null;
   const drones = planMatchupDrones({
@@ -682,7 +1007,9 @@ function runBattlePhase(
   // Apply health loss, then hand each side's result to the M3 economy engine
   // (streak progression, +2 PvP win bonus, HP compensation). Health may dip
   // <= 0 here; the batch step floors it. Compensation is against pre-loss
-  // health, so capture it before `applyLoss`.
+  // health, so capture it before `applyLoss`. `applyBattleResolution` only ever
+  // credits `tokens`, so `creditLedger` folds the whole delta into `earned`.
+  const tokensBeforeResolution = work.players.map((p) => p.tokens);
   for (const m of matchups) {
     const healthBeforeA = work.players[m.a]!.health;
     applyLoss(work, m.a, m.healthLossA);
@@ -705,6 +1032,7 @@ function runBattlePhase(
       });
     }
   }
+  creditLedger(work, tokensBeforeResolution);
 
   // Results + opponent history.
   for (const m of matchups) {
@@ -833,8 +1161,11 @@ export function runMatch(
     throw new RangeError(`runMatch(): maxRounds must be a positive integer, got ${maxRounds}`);
   }
 
+  // ---- Seat → AI policy (M7). `null` = a human seat driven by the action list.
+  const { policies, humanSeat } = resolveSeatPolicies(masterSeed, options.ai);
+
   const rng = new RngStream(masterSeed);
-  const work = initState(masterSeed);
+  const work = initState(masterSeed, humanSeat);
   const boundaries: PhaseBoundary[] = [];
   const cursor: Cursor = { i: 0 };
 
@@ -846,17 +1177,29 @@ export function runMatch(
     work.players[i]!.droneColour = colour;
   });
   for (const p of work.players) {
-    if (!p.isHuman) {
-      setLineup(p, placeholderDraftLineup(p.pool, ROLE_OF, rng.stream(`ai:${p.id}`, 0)), 'auto');
-    }
+    if (p.isHuman) continue;
+    // M7 — every non-human seat drafts through its archetype policy, from the
+    // per-seat `ai:<id>#0` substream. A seat with no policy (only possible for
+    // seat 0 when it is neither human nor listed) falls back to `balancedDraft`.
+    const policy = policies.get(p.id);
+    const sub = rng.stream(`ai:${p.id}`, 0);
+    setLineup(
+      p,
+      policy !== undefined
+        ? policy.draftLineup({ pool: p.pool.slice(), roleOf: ROLE_OF, rng: sub })
+        : balancedDraft(p.pool, ROLE_OF, sub),
+      'auto',
+    );
   }
   const draftInput = consumeUntilPhaseEnd(actions, cursor);
   work.humanConfirmedPhase = draftInput.confirmed;
-  const human = work.players[0]!;
-  if (draftInput.lineup !== null && isValidLineup(draftInput.lineup, human.pool)) {
-    setLineup(human, draftInput.lineup, 'human');
-  } else {
-    setLineup(human, placeholderDraftLineup(human.pool, ROLE_OF, rng.stream('human', 0)), 'auto');
+  const humanPlayer = work.players.find((p) => p.isHuman);
+  if (humanPlayer !== undefined) {
+    if (draftInput.lineup !== null && isValidLineup(draftInput.lineup, humanPlayer.pool)) {
+      setLineup(humanPlayer, draftInput.lineup, 'human');
+    } else {
+      setLineup(humanPlayer, balancedDraft(humanPlayer.pool, ROLE_OF, rng.stream('human', 0)), 'auto');
+    }
   }
   work.actionCursor = cursor.i;
   pushBoundary(boundaries, work, rng, 0, 0, 'draft');
@@ -875,21 +1218,36 @@ export function runMatch(
       work.matchups = [];
 
       if (work.phaseKind === 'moduleDraw') {
-        // SEAM (M3): base -> interest -> streak income for every living player.
-        // No-op on round 1 (the `1-1` screenshot shows every player at <>10).
+        // Round-start income: base -> interest -> streak, for every living
+        // player. No-op on round 1 (the `1-1` screenshot shows every player at
+        // <>10). `applyRoundStartIncome` only credits `tokens`, so the whole
+        // delta folds into each ledger's `earned`.
+        const tokensBeforeIncome = work.players.map((p) => p.tokens);
         applyRoundStartIncome(work);
+        creditLedger(work, tokensBeforeIncome);
+        // M7 — open every living player's shop for this round (carry-over from a
+        // locked set honoured); each bot then runs its archetype's shop turn.
+        openShopsForRound(work, rng, round, policies);
+      }
+      if (work.phaseKind === 'selectPosition') {
+        // M7 — each bot places its lineup on the 6×4 board.
+        runBotDeploys(work, rng, round, policies);
       }
 
       const matchFinished = work.phaseKind === 'battle'
         ? runBattlePhase(work, rng, combat, maxRounds)
         : false;
-      // moduleDraw: SEAM (M4 shop) — round-start income applied just above.
-      // selectPosition: SEAM (M8 deploy).
 
       const input = consumeUntilPhaseEnd(actions, cursor);
       work.humanConfirmedPhase = input.confirmed;
       work.actionCursor = cursor.i;
 
+      if (work.phaseKind === 'moduleDraw') {
+        applyHumanShopActions(work, input.shopActions, rng, round);
+      }
+      if (work.phaseKind === 'selectPosition') {
+        applyHumanDeployAction(work, input.deployCells);
+      }
       if (work.phaseKind === 'reward') {
         runRewardPhase(work, rng, round, input.rewardRefreshes, input.rewardPicks);
       }

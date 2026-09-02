@@ -15,11 +15,13 @@ export default tseslint.config(
     },
   },
   {
-    // The one architectural rule, enforced mechanically: `src/sim/` is pure and
+    // The one architectural rule, enforced mechanically: `src/sim/` — and
+    // `src/ai/`, the bot-policy layer that depends on it — are pure and
     // headless. No DOM, no wall clock, no platform RNG, no crypto, no imports
     // from `ui/` or `render/`. `tests/purity.spec.ts` greps the same tokens as a
-    // backstop for when this config drifts.
-    files: ['src/sim/**/*.ts'],
+    // backstop for when this config drifts. (Append only: the test asserts the
+    // `src/sim/**/*.ts` entry appears first, in a specific shape.)
+    files: ['src/sim/**/*.ts', 'src/ai/**/*.ts'],
     rules: {
       'no-console': 'error',
       'no-restricted-globals': [

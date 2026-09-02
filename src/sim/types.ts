@@ -11,10 +11,13 @@
  * PURE: no DOM, no wall clock, no platform RNG, no `ui/` / `render/` imports.
  */
 
+import type { Protocol } from '../data/types';
 import type { RngSnapshot, Substream } from './rng';
 import { hash128Hex } from './rng';
 import type { DroneColour, DroneSpec } from './drone';
-import type { StrengthenInventory } from './modules';
+import type { OwnedModule, ShopState, StrengthenInventory } from './modules';
+import type { SideModules } from './stats';
+import type { Deployment, DeployCell } from './board';
 
 // ---------------------------------------------------------------------------
 // Enumerations
@@ -86,10 +89,49 @@ export interface RefreshRewardAction {
 }
 
 /**
+ * Module Draw phase: buy (or upgrade) the module in shop slot `slot`. The sim
+ * routes it through `modules.buyModule`, which refuses an illegal ask (empty
+ * slot, unaffordable, maxed, rarity-locked) without changing state — the human
+ * seat is free to fumble; a bot's policy must not (M7).
+ */
+export interface BuyModuleAction {
+  readonly type: 'buyModule';
+  readonly slot: number;
+}
+
+/** Module Draw phase: sell an owned Base Module outright (refund + XP removal). */
+export interface SellModuleAction {
+  readonly type: 'sellModule';
+  readonly moduleId: string;
+}
+
+/** Module Draw phase: `REFRESH ◇1` — redraw the four shop cards (no-op while locked). */
+export interface RefreshShopAction {
+  readonly type: 'refreshShop';
+}
+
+/** Module Draw phase: toggle `LOCK` / `UNLOCK` on the current shop. */
+export interface LockShopAction {
+  readonly type: 'lockShop';
+}
+
+/**
+ * Select Position phase: place the six lineup heroes on the 6×4 board.
+ * `cells[i]` is where lineup hero `i` stands. An invalid deployment (wrong
+ * count, off-grid, double-occupied) is ignored and the engine formation stands.
+ */
+export interface DeployAction {
+  readonly type: 'deploy';
+  readonly cells: readonly DeployCell[];
+}
+
+/**
  * The action vocabulary. Later milestones extend this union in place — the
  * machine already skips any action it does not recognise for the current phase,
  * so adding members is non-breaking:
- *   M4 (deferred): buyModule / sellModule / refreshShop / lockShop / changeHero / swapHero
+ *   M7: buyModule / sellModule / refreshShop / lockShop (Module Draw) · deploy
+ *       (Select Position). changeHero / swapHero are still deferred to M8 — they
+ *       need the role-offer + swap-out flow, not just a primitive call.
  *   M6: selectReward / refreshReward (the Practice reward phase)
  *   M9: driveDrone (per-tick live capture — recorded input for the sim's drone seam)
  */
@@ -98,7 +140,12 @@ export type Action =
   | ConfirmPhaseAction
   | AdvanceTimerAction
   | SelectRewardAction
-  | RefreshRewardAction;
+  | RefreshRewardAction
+  | BuyModuleAction
+  | SellModuleAction
+  | RefreshShopAction
+  | LockShopAction
+  | DeployAction;
 
 // ---------------------------------------------------------------------------
 // Injected combat — M2 ships a stub; M5 swaps in the real resolver, untouched
@@ -117,6 +164,20 @@ export interface CombatSide {
   readonly isPhantom: boolean;
   /** True for the PvE Galacta Bot side. */
   readonly isGalactaBots: boolean;
+  /**
+   * M7 — this side's owned Base Modules + protocol levels, resolved by
+   * `match.ts` from the player's `ownedModules` / `protocolXp` at battle start.
+   * `null` / absent for the Galacta Bot side and for M5 direct tests;
+   * `SimulateOptions.sideAModules` / `.sideBModules` still override it.
+   */
+  readonly modules?: SideModules | null;
+  /**
+   * M7 — this side's 6-cell board deployment (index = lineup slot). `null` /
+   * absent means "use the engine formation" (`assignFormation`). `combat.ts`
+   * resolves it on the `selectPosition` seam; `SimulateOptions.place` still
+   * runs after and can override for tests.
+   */
+  readonly deployment?: Deployment | null;
 }
 
 export interface CombatContext {
@@ -167,6 +228,22 @@ export interface CombatResolver {
 // ---------------------------------------------------------------------------
 // State tree
 // ---------------------------------------------------------------------------
+
+/**
+ * M7 — the running token ledger that backs the conservation invariant
+ * (`modules.conserves`: `earned + refunded === spent + tokens`). `match.ts`
+ * folds every economy credit into `earned` and routes every module debit /
+ * refund through the `ModuleAccount` adapter, which writes `spent` / `refunded`
+ * here. `PlayerState.tokens` stays the single source of truth for the balance.
+ */
+export interface TokenLedger {
+  /** Starting tokens + all round income + HP compensation + PvP win bonuses. */
+  readonly earned: number;
+  /** All module purchases + shop refreshes + hero swaps. */
+  readonly spent: number;
+  /** All module sell refunds. */
+  readonly refunded: number;
+}
 
 export interface PlayerState {
   readonly id: number;
@@ -232,6 +309,35 @@ export interface PlayerState {
    * In a headless `runMatch` (no swap actions wired) `selectable` stays empty.
    */
   readonly strengthen: StrengthenInventory;
+
+  /**
+   * M7 — Base Modules owned, `{ moduleId, stars }`. Empty until the first
+   * purchase. Fed into combat as this player's `SideModules` at battle start.
+   */
+  readonly ownedModules: readonly OwnedModule[];
+  /**
+   * M7 — accumulated protocol XP per protocol. Level is derived
+   * (`modules.levelsFromXp`); a sell can drop it. `{ 0, 0, 0, 0 }` at start.
+   */
+  readonly protocolXp: Readonly<Record<Protocol, number>>;
+  /**
+   * M7 — this player's shop, reopened every Module Draw phase from a
+   * per-player, per-round substream (`shop:<id>#round`). `null` before the
+   * first is opened; a locked shop carries into the next round then unlocks
+   * (`SHOP_LOCK_BEHAVIOUR`).
+   */
+  readonly shop: ShopState | null;
+  /**
+   * M7 — the token ledger (see `TokenLedger`). Present from the draft boundary
+   * on, so `conserves` is checkable at every phase boundary.
+   */
+  readonly tokenLedger: TokenLedger;
+  /**
+   * M7 — this player's 6-cell board deployment (index = lineup slot), set on
+   * the `selectPosition` phase. `null` = the engine formation
+   * (`combat.assignFormation`), which is the human seat's default.
+   */
+  readonly deployment: Deployment | null;
 }
 
 export interface Matchup {
@@ -289,6 +395,16 @@ export interface RunMatchOptions {
    * callers never set it.
    */
   readonly maxRounds?: number;
+  /**
+   * M7 — AI policy assignment.
+   *   `undefined` (default): seat 0 is the human (the action list), seats 1..5
+   *     are bots whose archetypes rotate by seed (`AI_SEAT_ROTATION`).
+   *   `'aiOnly'`: seat 0 is also a bot (the rotation includes it, `isHuman`
+   *     goes false) — the mode the 100-match distribution gate runs in.
+   *   `Record<seatId, ArchetypeName>`: pin specific seats; naming seat 0 makes
+   *     it a bot. Unnamed non-human seats fall back to the seed rotation.
+   */
+  readonly ai?: 'aiOnly' | Readonly<Record<number, string>>;
 }
 
 export interface PhaseBoundary {

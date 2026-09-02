@@ -21,52 +21,60 @@ Built with TypeScript, Vite, and Vitest. **Zero runtime dependencies.**
 
 ## Status
 
-Milestone **M6** — the Ultron Drone and the Practice Protocol.
+Milestone **M7** — the AI opponents.
 
-The drone is **input, not a unit.** It never enters `field.units`, so no
-targeting code can acquire it and nothing can damage it; its HP is a frozen
-copy of the owning player's 50-based health and changes only between rounds,
-through round results. Its control is a deterministic, **quantized** per-tick
-stream carried in the action list (`src/sim/drone.ts` → `DroneInputStream`):
-movement as a fixed-point normalised vector (integer components in
-`±DRONE_MOVE_QUANT`, sqrt-normalised at read time — no raw float, no angles),
-ability presses as absolute tick indices, the Encephalo-Ray hold as tick
-ranges. Same seed + same stream hashes identically; a one-quant nudge to a
-single move frame changes the digest. The sim supports **N drones with
-pluggable input** — yours from the recorded stream, an opponent's from a
-policy — and ships a minimal, RNG-free **M7 placeholder policy**
-(`src/sim/dronePolicy.ts`, replaced wholesale in M7). `Encephalo-Ray` (hold
-LMB, infinite ammo) does a burning-beam trickle whose budget is an *assertion,
-not a constant*: `tests/drone.spec.ts` measures it held the entire battle and
-proves it is **< 0.1 % of a Duelist's whole-battle damage** (≈ 0.02 % in the
-test) — never a win condition. `LSHIFT` One-Time Damage hits every living
-enemy unit and no allies; `E` One-Time Healing the reverse; each fires at most
-once per Battle Phase, resets next round, and emits a kill event with the
-drone as `killer`. Colour is one of the canonical six, drawn once per match
-from a named substream.
+Five archetype policy bundles live in `src/ai/` (pure and headless, under the
+same ESLint override + grep test as `src/sim/`). Each is a bundle over **draft**
+(`src/ai/draft.ts`), the **module-shop turn** (`src/ai/shop.ts` drives
+`buyModule` / `refreshShop` / `lockShop` from a small `ShopPlan`, and *throws*
+if a policy ever asks for something the library would refuse — an illegal ask
+is a test failure, not a silent no-op), and **board deployment**
+(`src/ai/deploy.ts` builds a 6×4 `Deployment` from the plan's role heuristic:
+Vanguards front, ranged Duelists back, melee Duelists flanking, Strategists
+back-centre). The shared **drone policy** (`src/sim/dronePolicy.ts`, which
+replaces the M6 placeholder wholesale) tracks the nearest enemy, holds the
+Encephalo-Ray while an enemy lives, and fires One-Time Damage / Healing at the
+plan's ≥ 3 / ≥ 2 low-HP thresholds — RNG-free.
 
-**Galacta Bots** (`src/sim/galacta.ts` + `src/data/galacta.json`) are
-team-agnostic `Unit`s — `combat.ts` builds them onto side B exactly like
-heroes and only carries an `isGalactaBot` flag for M9's monster art. Waves for
-rounds 1 / 6 / 11 / 16 / 21 scale with the round number on top of a growing
-composition (6 units / ~1030 HP at round 1 → 15 units / ~7150 HP at round 21):
-rounds 1 and 6 are comfortable for a reasonable lineup, later waves are
-genuinely threatening (M11 tunes).
+To make an archetype's *spending* actually influence a win rate, M7 also **wired
+M4's module economy and a new deployment model into the round loop**:
+`PlayerState` now carries `ownedModules` / `protocolXp` / `shop` /
+`tokenLedger` / `deployment`; the shop opens for every living player each
+Module Draw phase from a **per-player, per-round substream** (`shop:<id>#round`,
+honouring `SHOP_LOCK_BEHAVIOUR` carry-over); a thin adapter projects a player
+into the `ModuleAccount` shape `modules.ts` / `economy.ts` already use so
+`PlayerState.tokens` stays the one balance; and each side's resolved
+`SideModules` + `Deployment` ride on `CombatContext` into `combat.ts`, which
+resolves the deployment on the `selectPosition` seam and falls back to
+`assignFormation` when none is supplied. `src/sim/board.ts` is the pure board
+model — validity predicate plus the single cell→arena mapping `combat.ts` now
+shares.
 
-The **Practice reward phase** (phase 4) grants Strengthen Modules — 1 on
-rounds 1 & 6, 2 on 11 / 16 / 21 — from three offers scoped to the current
-lineup, excluding modules already owned, with one free `REFRESH 1/1`. Rounds
-that pay 2 use one offer set of three, select two. Grants are unconditional
-(a Practice loss still pays), Practice rounds cost no health, and a documented
-`offerFewer` fallback handles the shrinking eligible pool without throwing.
-Each unpublished rule — PvE-loss health, reward-on-win, the multi-reward
-shape, the offer fallback, and whether a mirror / phantom matchup fields an
-opponent drone — is pinned by a named `src/data/authored.ts` constant with a
-provenance note.
+Every bot decision draws from a substream keyed by that seat's id
+(`ai:<id>#0` draft, `shop:<id>#round`, `ai:<id>:deploy#round`), so — proven in
+`tests/ai.spec.ts` — **adding a bot, changing one bot's archetype, or one bot
+drawing far more values shifts no other seat's substream cursors or state.**
+`RunMatchOptions.ai` (`'aiOnly'` or a per-seat map) drives a fully AI-only
+match; seat → archetype rotates by `masterSeed % 5` so the sixth seat's
+doubled archetype rotates too and no archetype is confounded with a fixed seat.
 
-Real Galacta waves and drones changed the M5 golden replay outcomes;
-`tests/replay.spec.ts` was regenerated deliberately (documented in the file
-header) — no determinism test was weakened.
+Over **100 seeded AI-only matches** every archetype wins between 5 % and 50 %
+(measured: 14–23 %; ~9 s inside `npm test`). The five bots also field exactly
+six heroes and a legal 6-cell deployment every round, a 10 000-turn shop fuzz
+finds no illegal ask / negative balance / over-starred module, and token
+conservation (`earned + refunded === spent + tokens`) holds for every player at
+every phase boundary.
+
+**Human-seat plumbing** (`buyModule` / `sellModule` / `refreshShop` /
+`lockShop` / `deploy` actions) is wired thinly; with no such actions the human
+makes no purchases and takes the engine formation. `changeHero` / `swapHero`
+are deferred to M8 — they need the role-offer + swap-out flow, not just a
+primitive call.
+
+The archetypes drafting, spending and deploying changed the M6 golden replay
+outcomes; `tests/replay.spec.ts` was regenerated deliberately in two verified
+steps (documented in the file header) — no determinism test was weakened, and
+`tests/determinism.spec.ts` is untouched.
 
 Delivered so far:
 
@@ -96,7 +104,7 @@ Delivered so far:
   outcomes with a documented regeneration path.
 - **M6** — `src/sim/drone.ts` (the Ultron Drone: quantized deterministic input
   model, the N-drone / policy seam, colour draw, the mirror / phantom matchup
-  call), `src/sim/dronePolicy.ts` (the M7 placeholder policy),
+  call), `src/sim/dronePolicy.ts` (the drone policy),
   `src/sim/galacta.ts` + `src/data/galacta.json` (team-agnostic Galacta Bot
   waves with per-round scaling), and `src/sim/practice.ts` (the Practice
   reward phase — offers, refresh, selection, grant, ownership, the shrinking-
@@ -110,11 +118,24 @@ Delivered so far:
   1 / 1 / 2 / 2 / 2 reward counts, lineup-scoped offers, single refresh, the
   shrinking-pool edge, unconditional grants, health-neutral Practice rounds,
   the mid-battle `B MODULES` freeze end to end, and the swap-conversion path.
+- **M7** — `src/ai/` (the five archetype policy bundles: `draft.ts`, `shop.ts`,
+  `deploy.ts`, `archetypes.ts`, `types.ts`), `src/sim/board.ts` (the 6×4 deploy
+  board — validity + the shared cell→arena mapping), the real
+  `src/sim/dronePolicy.ts`, and the module-economy + deployment wiring in
+  `match.ts` (per-player per-round shop, the `ModuleAccount` adapter + token
+  ledger, bot shop / deploy turns, the `ai` option and seat rotation, thin
+  human `buyModule` / `sellModule` / `refreshShop` / `lockShop` / `deploy`
+  actions) and `combat.ts` (`SideModules` + `Deployment` on `CombatContext`).
+  `tests/ai.spec.ts` covers substream isolation, the 10 000-turn legality fuzz,
+  per-round lineup + deployment legality, token conservation, and the 100-match
+  distribution gate with its per-archetype table; `tests/match.spec.ts` gains
+  the shop-opens / purchase-persists / XP-accumulates / deployment-persists
+  checks and `src/sim/board.ts` validity.
 
-`src/sim/` is pure and headless — no DOM, no wall clock, no `Math.random`, no
-transcendental math (`Math.sin` / `cos` / `pow` / `hypot` / `**` — direction is
-normalised vector math, sqrt only), no `ui/` / `render/` imports — enforced by
-an ESLint override *and* a grep test.
+`src/sim/` and `src/ai/` are pure and headless — no DOM, no wall clock, no
+`Math.random`, no transcendental math (`Math.sin` / `cos` / `pow` / `hypot` /
+`**` — direction is normalised vector math, sqrt only), no `ui/` / `render/`
+imports — enforced by an ESLint override *and* a grep test.
 
 See [`PLANS/ultron-battle-matrix-protocol.md`](PLANS/ultron-battle-matrix-protocol.md)
 for the full roadmap.

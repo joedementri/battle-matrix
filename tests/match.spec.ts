@@ -15,6 +15,16 @@ import {
 } from '../src/sim/match';
 import { RngStream } from '../src/sim/rng';
 import { createStubCombatResolver } from '../src/sim/stubCombat';
+import { simulateBattle } from '../src/sim/combat';
+import {
+  BACK_ROW,
+  DEPLOY_COLS,
+  DEPLOY_ROWS,
+  FRONT_ROW,
+  cellToArena,
+  isCellInBounds,
+  isValidDeployment,
+} from '../src/sim/board';
 import { serializeState } from '../src/sim/types';
 import type {
   Action,
@@ -633,5 +643,211 @@ describe('200-seed fuzz (stub combat)', () => {
         }
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M7 — module economy + deployment wired into the round loop
+// ---------------------------------------------------------------------------
+
+const PROTOCOLS = ['fortress', 'onslaught', 'reboot', 'equilibrium'] as const;
+const xpSum = (xp: Readonly<Record<string, number>>): number =>
+  PROTOCOLS.reduce((s, p) => s + (xp[p] ?? 0), 0);
+
+describe('M7 module economy wiring', () => {
+  it('every living player has an open 4-card shop for the round at every Module Draw boundary', () => {
+    for (const seed of [1, 7, 2024]) {
+      const res = runMatch(seed, [], stub());
+      for (const b of res.boundaries) {
+        if (b.kind !== 'moduleDraw') continue;
+        for (const p of b.state.players) {
+          if (!p.alive) continue;
+          expect(p.shop, `seed ${seed} @${b.label} p${p.id} shop`).not.toBeNull();
+          expect(p.shop!.round, `seed ${seed} @${b.label} p${p.id} shop round`).toBe(b.round);
+          expect(p.shop!.slots, `seed ${seed} @${b.label} p${p.id} shop slots`).toHaveLength(4);
+        }
+      }
+    }
+  });
+
+  it("a human buyModule action persists: the module is owned and its protocol's XP ticks", () => {
+    const probe = runMatch(9, [], stub());
+    const pool = probe.boundaries[0]!.state.players[0]!.pool;
+    const actions: Action[] = [
+      { type: 'selectLineup', heroes: pool.slice(0, 6) },
+      { type: 'confirmPhase' }, // draft
+      { type: 'confirmPhase' }, // 1-1
+      { type: 'advanceTimer' }, // 1-2
+      { type: 'confirmPhase' }, // 1-3
+      { type: 'advanceTimer' }, // 1-4 reward
+      { type: 'buyModule', slot: 0 }, // 2-1: buy the first card (a Common, 5 tokens)
+      { type: 'confirmPhase' }, // 2-1
+    ];
+    const res = runMatch(9, actions, stub());
+    const twoOne = res.boundaries.find((b) => b.label === '2-1')!;
+    const human = twoOne.state.players[0]!;
+
+    expect(human.ownedModules).toHaveLength(1);
+    expect(human.ownedModules[0]!.stars).toBe(1);
+    expect(human.tokens).toBe(26 - 5); // 10 + round-2 income (16) − a Common
+    expect(xpSum(human.protocolXp)).toBe(1); // one Common → +1 XP into its protocol
+    // the buy is not undone later
+    for (const b of res.boundaries.filter((x) => x.round >= 2)) {
+      expect(b.state.players[0]!.ownedModules.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('a bot accumulates modules and protocol XP monotonically across a full match (never sells)', () => {
+    for (const seed of [3, 40, 777]) {
+      const res = runMatch(seed, [], stub(), { ai: 'aiOnly' });
+      for (let seat = 0; seat < 6; seat++) {
+        let mods = 0;
+        let xp = 0;
+        for (const b of res.boundaries) {
+          const p = b.state.players[seat]!;
+          if (!p.alive && p.eliminatedRound !== null && b.round > p.eliminatedRound) continue;
+          const m = p.ownedModules.reduce((s, o) => s + o.stars, 0);
+          expect(m, `seed ${seed} seat ${seat} @${b.label} module stars`).toBeGreaterThanOrEqual(mods);
+          expect(xpSum(p.protocolXp), `seed ${seed} seat ${seat} @${b.label} xp`).toBeGreaterThanOrEqual(xp);
+          mods = m;
+          xp = xpSum(p.protocolXp);
+        }
+        // ...and it actually bought something over the match.
+        expect(res.finalState.players[seat]!.ownedModules.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('token conservation (earned + refunded === spent + tokens) holds at every boundary', () => {
+    for (const seed of [2, 22, 2222]) {
+      const res = runMatch(seed, [], stub(), { ai: 'aiOnly' });
+      for (const b of res.boundaries) {
+        for (const p of b.state.players) {
+          const { earned, spent, refunded } = p.tokenLedger;
+          expect(earned + refunded, `seed ${seed} @${b.label} p${p.id}`).toBe(spent + p.tokens);
+        }
+      }
+    }
+  });
+});
+
+describe('M7 deployment wiring', () => {
+  it("each bot's board deployment is a legal 6-cell placement and persists into the battle phase", () => {
+    for (const seed of [1, 5, 12, 33]) {
+      const res = runMatch(seed, [], stub(), { ai: 'aiOnly' });
+      for (const b of res.boundaries) {
+        if (b.round < 1 || b.phase < 2) continue; // deployment is set on Select Position
+        for (const p of b.state.players) {
+          if (!p.alive) continue;
+          expect(p.deployment, `seed ${seed} @${b.label} p${p.id}`).not.toBeNull();
+          expect(isValidDeployment(p.deployment!, 6)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('a deployment carried on the context lands units on the mapped arena cells', () => {
+    // A hand-built deployment for side A; assert `simulateBattle` spawns each
+    // unit exactly where `cellToArena` says.
+    const lineup = ['captain-america', 'hulk', 'wolverine', 'black-widow', 'mantis', 'loki'];
+    const deployment = [
+      { col: 2, row: FRONT_ROW },
+      { col: 3, row: FRONT_ROW },
+      { col: 1, row: FRONT_ROW - 1 },
+      { col: 4, row: FRONT_ROW - 1 },
+      { col: 2, row: BACK_ROW },
+      { col: 3, row: BACK_ROW },
+    ];
+    const ctx: CombatContext = {
+      round: 3,
+      roundType: 'battle',
+      matchupKind: 'pvp',
+      sideA: {
+        playerId: 0,
+        lineup,
+        isPhantom: false,
+        isGalactaBots: false,
+        modules: null,
+        deployment,
+      },
+      sideB: {
+        playerId: 1,
+        lineup: ['groot', 'thor', 'iron-fist', 'storm', 'adam-warlock', 'luna-snow'],
+        isPhantom: false,
+        isGalactaBots: false,
+        modules: null,
+        deployment: null,
+      },
+      rng: new RngStream(1).stream('combat:spec', 3),
+    };
+    // `opts.place` runs right after the deployment is resolved and before tick 1,
+    // so it captures the exact deployed coordinates (no movement yet).
+    let seen: { x: number; y: number; slot: number }[] = [];
+    simulateBattle(ctx, {
+      tieCapTicks: 1,
+      place: (units) => {
+        seen = units
+          .filter((u) => u.side === 0)
+          .sort((a, b) => a.slot - b.slot)
+          .map((u) => ({ x: u.x, y: u.y, slot: u.slot }));
+      },
+    });
+    const expected = deployment.map((c) => cellToArena(c.col, c.row, 0));
+    for (let i = 0; i < 6; i++) {
+      expect(seen[i]!.x, `slot ${i} x`).toBeCloseTo(expected[i]!.x, 9);
+      expect(seen[i]!.y, `slot ${i} y`).toBeCloseTo(expected[i]!.y, 9);
+    }
+    // front-row (row 3) at y 0; back-row (row 0) deeper (more negative).
+    expect(expected[0]!.y).toBeCloseTo(0, 9);
+    expect(expected[4]!.y).toBeLessThan(expected[0]!.y);
+  });
+});
+
+describe('src/sim/board.ts validity', () => {
+  const good = [
+    { col: 0, row: 0 },
+    { col: 5, row: 3 },
+    { col: 2, row: 1 },
+    { col: 3, row: 2 },
+    { col: 1, row: 3 },
+    { col: 4, row: 0 },
+  ];
+
+  it('accepts a legal 6-cell deployment', () => {
+    expect(isValidDeployment(good, 6)).toBe(true);
+  });
+
+  it('rejects the wrong count', () => {
+    expect(isValidDeployment(good.slice(0, 5), 6)).toBe(false);
+    expect(isValidDeployment([...good, { col: 0, row: 1 }], 6)).toBe(false);
+  });
+
+  it('rejects an off-grid cell', () => {
+    expect(isValidDeployment([{ col: 6, row: 0 }, ...good.slice(1)], 6)).toBe(false);
+    expect(isValidDeployment([{ col: 0, row: 4 }, ...good.slice(1)], 6)).toBe(false);
+    expect(isValidDeployment([{ col: -1, row: 0 }, ...good.slice(1)], 6)).toBe(false);
+    expect(isValidDeployment([{ col: 0, row: 1.5 }, ...good.slice(1)], 6)).toBe(false);
+  });
+
+  it('rejects a double-occupied cell', () => {
+    expect(isValidDeployment([{ col: 5, row: 3 }, ...good.slice(1)], 6)).toBe(false); // dup of good[1]
+  });
+
+  it('isCellInBounds matches the 6×4 grid', () => {
+    expect(DEPLOY_COLS).toBe(6);
+    expect(DEPLOY_ROWS).toBe(4);
+    expect(isCellInBounds({ col: 0, row: 0 })).toBe(true);
+    expect(isCellInBounds({ col: 5, row: 3 })).toBe(true);
+    expect(isCellInBounds({ col: 5, row: 4 })).toBe(false);
+  });
+
+  it('cellToArena centres the columns and places front row nearest the centre line', () => {
+    // symmetric about x = 0
+    expect(cellToArena(0, 0, 0).x).toBeCloseTo(-cellToArena(5, 0, 0).x, 9);
+    // side A front row (row 3) at y 0; deeper rows more negative
+    expect(cellToArena(2, FRONT_ROW, 0).y).toBeCloseTo(0, 9);
+    expect(cellToArena(2, BACK_ROW, 0).y).toBeLessThan(0);
+    // side B is past the team separation
+    expect(cellToArena(2, FRONT_ROW, 1).y).toBeGreaterThan(0);
   });
 });

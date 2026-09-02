@@ -41,6 +41,7 @@ import {
   ARENA_TEAM_SEPARATION,
   BATTLE_MAX_TICKS,
   BATTLE_TIE_CAP_TICKS,
+  DEPLOY_MELEE_DUELIST_RANGE_MAX,
   DRONE_MOVE_SPEED,
   DRONE_ONE_TIME_DAMAGE,
   DRONE_ONE_TIME_HEALING,
@@ -56,12 +57,14 @@ import heroesJson from '../data/heroes.json';
 import type { Role, Targeting, UltArchetype } from '../data/types';
 
 import { castUlt } from './abilities';
+import { cellToArena } from './board';
+import type { Deployment } from './board';
 import {
   beamHeldAt,
   decodeDroneMove,
 } from './drone';
 import type { DroneColour, DroneSpec } from './drone';
-import { placeholderDronePolicy } from './dronePolicy';
+import { dronePolicy } from './dronePolicy';
 import type { DroneCommand } from './dronePolicy';
 import { galactaWave, resolvedFromGalacta } from './galacta';
 import {
@@ -517,13 +520,29 @@ export function updateOutOfRangeTimer(
 function preferredRow(u: BattleUnit): number {
   if (u.role === 'vanguard') return GRID_ROWS - 1;
   if (u.role === 'strategist') return 0;
-  return u.resolved.attackRange <= 8 ? GRID_ROWS - 2 : GRID_ROWS - 3;
+  return u.resolved.attackRange <= DEPLOY_MELEE_DUELIST_RANGE_MAX ? GRID_ROWS - 2 : GRID_ROWS - 3;
 }
 
 function placeCell(u: BattleUnit, col: number, row: number): void {
-  u.x = (col - (GRID_COLS - 1) / 2) * ARENA_CELL_SIZE;
-  const depthFromFront = (GRID_ROWS - 1 - row) * ARENA_CELL_SIZE;
-  u.y = u.side === 0 ? -depthFromFront : ARENA_TEAM_SEPARATION + depthFromFront;
+  const pos = cellToArena(col, row, u.side);
+  u.x = pos.x;
+  u.y = pos.y;
+}
+
+/**
+ * M7 — override a side's post-formation positions with an explicit board
+ * `Deployment` (index = lineup slot). Cells the deployment omits keep the
+ * `assignFormation` position. Runs before `opts.place`, so a test seam still wins.
+ */
+function applyDeployment(units: BattleUnit[], side: 0 | 1, deployment: Deployment): void {
+  const group = units.filter((u) => u.side === side).sort((a, b) => a.slot - b.slot);
+  for (let i = 0; i < group.length; i++) {
+    const cell = deployment[i];
+    if (cell === undefined) continue;
+    const pos = cellToArena(cell.col, cell.row, side);
+    group[i]!.x = pos.x;
+    group[i]!.y = pos.y;
+  }
 }
 
 export function assignFormation(units: BattleUnit[]): void {
@@ -660,7 +679,10 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
   if (lineupA.length === 0) throw new RangeError('combat: side A needs at least one hero');
   if (!isPve && lineupB.length === 0) throw new RangeError('combat: side B needs at least one hero');
 
-  const modA = opts.sideAModules ?? emptySide();
+  // M7: modules ride on `CombatContext.sideX.modules` (resolved by match.ts
+  // from the player's owned modules + protocol XP). `SimulateOptions` still
+  // overrides for M5 direct tests; `emptySide()` is the final fallback.
+  const modA = opts.sideAModules ?? ctx.sideA.modules ?? emptySide();
   const units: BattleUnit[] = [];
 
   if (isPve) {
@@ -680,7 +702,7 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
       units.push(makeUnit(units.length, 1, slot, spec.kind, meta, resolvedFromGalacta(spec), true));
     });
   } else {
-    const modB = opts.sideBModules ?? emptySide();
+    const modB = opts.sideBModules ?? ctx.sideB.modules ?? emptySide();
     const resolvedA = resolveUnits(lineupA, modA, lineupB, modB);
     const resolvedB = resolveUnits(lineupB, modB, lineupA, modA);
     lineupA.forEach((heroId, slot) => {
@@ -692,6 +714,12 @@ function buildField(ctx: CombatContext, opts: SimulateOptions): BattleField {
   }
 
   assignFormation(units);
+  // M7: an explicit board deployment (from `PlayerState.deployment`, carried on
+  // the context) overrides the formation for that side. Side B has none in PvE.
+  const deployA = ctx.sideA.deployment;
+  const deployB = ctx.sideB.deployment;
+  if (deployA !== undefined && deployA !== null) applyDeployment(units, 0, deployA);
+  if (!isPve && deployB !== undefined && deployB !== null) applyDeployment(units, 1, deployB);
   if (opts.place !== undefined) opts.place(units);
 
   return {
@@ -910,7 +938,7 @@ function countUnitsBelowFraction(field: BattleField, side: 0 | 1, frac: number):
   return n;
 }
 
-/** One tick of control for a drone: recorded stream if present, else the M7-placeholder policy. */
+/** One tick of control for a drone: recorded stream if present, else the shared M7 policy. */
 function droneCommand(field: BattleField, d: DroneRuntime, tick: number): DroneCommand {
   if (d.input !== null) {
     return {
@@ -921,11 +949,17 @@ function droneCommand(field: BattleField, d: DroneRuntime, tick: number): DroneC
     };
   }
   const enemySide: 0 | 1 = d.side === 0 ? 1 : 0;
-  return placeholderDronePolicy({
+  const nearestEnemyId = nearestEnemyUnitToPoint(field, d.side, d.x, d.y);
+  const target = nearestEnemyId >= 0 ? field.units[nearestEnemyId] : undefined;
+  return dronePolicy({
     enemiesBelowLowHp: countUnitsBelowFraction(field, enemySide, DRONE_POLICY_LOW_HP_FRACTION),
     alliesBelowLowHp: countUnitsBelowFraction(field, d.side, DRONE_POLICY_LOW_HP_FRACTION),
     oneTimeDamageUsed: d.oneTimeDamageUsed,
     oneTimeHealUsed: d.oneTimeHealUsed,
+    x: d.x,
+    y: d.y,
+    targetX: target !== undefined ? target.x : null,
+    targetY: target !== undefined ? target.y : null,
   });
 }
 

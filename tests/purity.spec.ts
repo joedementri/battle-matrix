@@ -4,16 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 /*
  * The one architectural rule, enforced as a backstop to the ESLint override:
- * `src/sim/` is pure and headless. This test greps every sim source file for
- * DOM/BOM globals, the wall clock, the platform RNG, crypto, and any import that
- * reaches into `ui/` or `render/`. Comments are stripped first so the sim's own
- * doc prose may name the things it forbids.
+ * `src/sim/` — and `src/ai/`, the bot-policy layer that depends on it — are pure
+ * and headless. This test greps every such source file for DOM/BOM globals, the
+ * wall clock, the platform RNG, crypto, and any import that reaches into `ui/`
+ * or `render/`. Comments are stripped first so the layer's own doc prose may
+ * name the things it forbids.
  *
  * Lint config drifts; this test does not.
  */
 
 const ROOT = process.cwd();
 const SIM_DIR = join(ROOT, 'src', 'sim');
+const AI_DIR = join(ROOT, 'src', 'ai');
 
 function tsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -69,11 +71,12 @@ const FORBIDDEN: readonly Rule[] = [
   { name: 'dynamic import of ui/ or render/', re: /\bimport\s*\(\s*['"][^'"]*\/(ui|render)\// },
 ];
 
-describe('src/sim purity — grep backstop', () => {
-  const files = tsFiles(SIM_DIR);
+describe('src/sim + src/ai purity — grep backstop', () => {
+  const files = [...tsFiles(SIM_DIR), ...tsFiles(AI_DIR)];
 
-  it('finds sim source files to inspect', () => {
+  it('finds sim + ai source files to inspect', () => {
     expect(files.length).toBeGreaterThanOrEqual(4);
+    expect(tsFiles(AI_DIR).length).toBeGreaterThanOrEqual(3);
   });
 
   for (const file of files) {
@@ -109,5 +112,9 @@ describe('src/sim purity — the ESLint override ships too (both, not either)', 
     expect(cfg).toMatch(/Math['"]?\s*,\s*property:\s*['"]random['"]/);
     expect(cfg).toMatch(/ui\/\*\*/);
     expect(cfg).toMatch(/render\/\*\*/);
+  });
+
+  it('the same override also covers src/ai/**', () => {
+    expect(cfg).toMatch(/files:\s*\[\s*['"]src\/sim\/\*\*\/\*\.ts['"]\s*,\s*['"]src\/ai\/\*\*\/\*\.ts['"]/);
   });
 });
