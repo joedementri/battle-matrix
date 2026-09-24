@@ -27,7 +27,7 @@ import type { CombatContext } from '../sim/types';
 
 import { getArena } from './arena';
 import type { ArenaCache } from './arena';
-import { buildBattleFrame, CmdList, findCmd } from './frame';
+import { buildBattleFrame, CmdList, findCmd, makeProjector } from './frame';
 import type { BattleHudView, Layout } from './frame';
 import { Executor } from './executor';
 import { FixedLoop } from './loop';
@@ -194,7 +194,9 @@ export class BattleRenderer {
     const fStart = now();
     this.loop.advance(frameDeltaMs);
     const bStart = now();
-    const list = this.buildFrame(this.loop.alpha);
+    // M11 accessibility — prefers-reduced-motion: draw at the latest tick with
+    // no between-tick interpolation (units snap rather than glide).
+    const list = this.buildFrame(this.opts.reducedMotion === true ? 1 : this.loop.alpha);
     const bEnd = now();
     this.draw(list);
     const fEnd = now();
@@ -230,7 +232,7 @@ export class BattleRenderer {
       oneTimeDamageSpent: drone?.oneTimeDamageUsed ?? false,
       oneTimeHealSpent: drone?.oneTimeHealUsed ?? false,
       killFeed: this.killFeed.rows(this.controller.tick, this.opts.reducedMotion === true),
-      damageNumbers: this.dmg.active(this.controller.tick),
+      damageNumbers: this.dmg.active(this.controller.tick, this.opts.reducedMotion === true),
       droneControl: this.droneControl,
     };
   }
@@ -274,6 +276,53 @@ export class BattleRenderer {
       if (cssX >= c.x && cssX <= c.x + c.w && cssY >= c.y && cssY <= c.y + c.h) return c.id;
     }
     return null;
+  }
+
+  /**
+   * Canvas click → the id of the nearest unit within ~24 css px, or null.
+   * Read-only: used by the `?debug=1` overlay to pick a unit whose resolved
+   * stats to show. Never feeds sim state.
+   */
+  pickUnitAt(cssX: number, cssY: number): number | null {
+    const proj = makeProjector(this.curSnap.bounds, this.layout);
+    let bestId: number | null = null;
+    let bestDistSq = 24 * 24;
+    for (const u of this.curSnap.units) {
+      const dx = proj.px(u.x) - cssX;
+      const dy = proj.py(u.y) - cssY;
+      const d = dx * dx + dy * dy;
+      if (d < bestDistSq) {
+        bestDistSq = d;
+        bestId = u.id;
+      }
+    }
+    return bestId;
+  }
+
+  /** A read-only tail of the sim's event streams for the `?debug=1` overlay. */
+  eventLog(max: number): readonly string[] {
+    const c = this.controller;
+    const rows: { tick: number; text: string }[] = [];
+    for (const k of c.kills) {
+      rows.push({
+        tick: k.tick,
+        text: `t${k.tick} KO ${k.killerHeroId ?? 'drone'} ⟶ ${k.weapon} ⟶ ${k.victimHeroId}`,
+      });
+    }
+    for (const r of c.revives) {
+      rows.push({ tick: r.tick, text: `t${r.tick} REVIVE ${r.heroId} +${Math.round(r.healthRestored)}` });
+    }
+    const log = c.damageLog;
+    if (log !== null) {
+      for (const d of log.slice(-max)) {
+        rows.push({
+          tick: d.tick,
+          text: `t${d.tick} ${d.source} ${d.srcUnitId}→${d.tgtUnitId} ${d.amount.toFixed(1)}${d.convertedToHeal ? ' (→heal)' : ''}`,
+        });
+      }
+    }
+    rows.sort((a, b) => a.tick - b.tick);
+    return rows.slice(-max).map((r) => r.text);
   }
 
   findCommand(id: string): ReturnType<typeof findCmd> {

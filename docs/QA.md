@@ -1,4 +1,9 @@
-# M8 — UI shell QA checklist
+# QA checklist — screens (M8), battle renderer (M9), balance + polish + ship (M11)
+
+> M8/M9 sections below are the original per-screen and per-renderer checklists.
+> The **M11** sections at the end record the accessibility work, the `Tab`
+> decision, the interactive-time measurement, and the 17-step end-to-end
+> acceptance walk.
 
 Side-by-side check of every M8 screen against its screenshot in `Screenshots/`.
 **Open the screenshot before checking the screen.** Run `npm run preview`, then
@@ -252,3 +257,154 @@ Resize the browser and confirm no horizontal body scroll and legible text.
 | `prefers-reduced-motion` | All transitions/animations collapse to ~0 ms | ✅ 2026-09-02 |
 
 > Re-run this table whenever a layout token in `src/ui/theme.css` changes.
+
+---
+---
+
+# M11 — accessibility, `Tab` decision, interactive time, 17-step acceptance
+
+## Accessibility record
+
+### Full keyboard navigation — shop and board
+
+| Surface | Path | Notes |
+|---|---|---|
+| Draft pool cards | `keyActivate` (role `button`, `tabindex 0`, Enter/Space) | picked cards stay focusable; a fully-drafted pool disables the rest via `tabindex -1` |
+| Draft `LINEUP (n/6)` | native `<button>` | disabled until exactly 6 picked |
+| Shop tabs `SELECT · ACTIVATED · CHANGE HERO` | native `<button>` | the active tab reads by gold underline **and** `--bm-accent` colour + `border-bottom` (not colour alone) |
+| Shop cards | `keyActivate` | `tabindex -1` while the shop is `LOCK`ed (nothing to buy); empty slots are `aria-hidden` |
+| `REFRESH` / `LOCK` | native `<button>` | `disabled` attribute when unavailable |
+| Change-Hero role cards | native `<button>` | |
+| Swap-out reserve/active picks | `keyActivate` | `CONFIRM` blocked until one of each is selected |
+| Reward Strengthen cards | `keyActivate` | `tabindex -1` once the needed count is picked |
+| Board cells (Select Position) | `tabindex 0` + Enter/Space (M8) | Tab to a cell, Enter to pick up / drop |
+| Left-rail protocol icons | native `<button>` | opens the info pane |
+| Seed bar (input / PLAY / COPY LINK / colour-blind toggle) | native controls | fixed top-right, always reachable |
+| `?debug=1` overlay | `pointer-events: auto`, scrollable | click a unit for its resolved stats |
+
+Visible focus: `.bm-btn:focus-visible`, `.bm-focusable:focus-visible`,
+`.bm-seedbar__*:focus-visible` all draw `outline: 2px solid var(--bm-accent);
+outline-offset`. `dom.keyActivate` is the shared Enter/Space helper;
+`tests/ui-actions.spec.ts` asserts every UI action maps to a legal sim action.
+
+### `prefers-reduced-motion`
+
+| Motion | Reduced-motion behaviour | Where |
+|---|---|---|
+| All CSS transitions / animations | collapse to ~0 ms | `theme.css` `@media (prefers-reduced-motion: reduce)` (global rule) |
+| Draft / scoreboard faded rows | held at full opacity (not faded out) | asserted in `tests/render.spec.ts` (pre-M11) |
+| Kill feed rows | held at full opacity past the hold window | `KillFeed.rows(tick, reducedMotion)` — `tests/render.spec.ts` |
+| Damage numbers | no upward drift, no fade — the number holds at full opacity for its life then vanishes | `DamageNumbers.active(tick, reducedMotion)` — `tests/render.spec.ts` (M11) |
+| Battle interpolation | the renderer draws at the latest tick (`alpha = 1`); units **snap** rather than glide between ticks | `BattleRenderer.advance` passes `1` to `buildFrame` — `tests/render.spec.ts` (M11) |
+| Speed Up announcement | the canvas banner is drawn at static full alpha (no pulse); the legacy DOM `.bm-speedup` pulse is disabled by the global media rule | `executor.drawBanner` |
+
+The renderer takes `reducedMotion` from
+`window.matchMedia('(prefers-reduced-motion: reduce)').matches` in
+`GameApp.syncBattleRenderer`.
+
+### Colour-blind-safe palette
+
+An **opt-in override layer**, not a recolour — `tests/theme.spec.ts` still
+asserts every canonical `--bm-*` hex against the plan's table, and the M11 test
+asserts the CB layer introduces **no hex colour of its own**.
+
+- Toggle: a checkbox in the top-right seed bar (label `strings.CB_MODE_LABEL`).
+  Preference persisted per browser in `localStorage` (`bm.cbAssist`, wrapped in
+  try/catch). Applied to `<html data-cb="1">` before first paint.
+- Reinforcement under `:root[data-cb="1"]` (`theme.css`):
+  - hero-token role **shapes** get a fatter stroke (`stroke-width: 10`);
+  - every hero token shows a **text role chip** (`content: attr(data-role)` —
+    `heroToken.ts` sets `data-role`), so role reads without hue;
+  - protocol / role **cards** get a distinct border *pattern* — solid
+    (Fortress/Vanguard), dashed (Onslaught/Duelist), dotted (Reboot/Strategist),
+    double (Equilibrium / Change-Hero);
+  - scoreboard protocol **dots** get a distinct *shape* per protocol (square /
+    circle / triangle / diamond / pentagon-Strengthen).
+- The role SHAPES (shield / blade / cross in `heroArt.ts`) already carry role
+  independent of colour in the default palette; the CB layer amplifies them and
+  adds the text fallback.
+
+## The `Tab` conflict — decision
+
+**Problem (plan §3e).** M8/M9 shipped `GameApp.onGlobalKey` intercepting *every*
+`Tab` keydown with `preventDefault()` to toggle the scoreboard, which destroyed
+browser focus traversal — directly against "full keyboard navigation".
+
+**Decision.** `Tab` toggles the scoreboard **only when focus is not inside an
+interactive control**. `onGlobalKey` checks `document.activeElement`: if it (or an
+ancestor) matches `button, a[href], input, select, textarea,
+[tabindex]:not([tabindex="-1"]), [role="button"]`, the handler **returns without
+`preventDefault`** and the browser moves focus normally. Otherwise (focus on
+`document.body` — the "just watching the battle" state) `Tab` preventDefaults and
+toggles the scoreboard, as the game does.
+
+**Rationale.** While a keyboard user is tabbing through the shop / board / seed
+bar, every Tab traverses focus. When nothing interactive is focused — the
+default in-round state — Tab is the scoreboard key. The two never fight because
+they never apply in the same focus state. (Hold-to-view was the alternative; it
+still needs `preventDefault` on keydown and flickers on a quick press, so the
+focus-state check is cleaner for accessibility.)
+
+**Recorded** alongside the M9 camera / `LALT` deviations (this file) and
+`docs/FIDELITY.md` §7.
+
+## Interactive in < 2 s cold — measurement
+
+**Method (for a human, against `npm run preview` and the deployed URL).** Chrome
+DevTools → Performance, hard-reload with cache disabled, read *Time to
+Interactive* / LCP; or Lighthouse (mobile + desktop presets) → *Time to
+Interactive*. Repeat 3× and take the median.
+
+**Objective proxies measured in this environment** (there is deliberately no
+browser-automation dependency — plan §4.5):
+
+| Proxy | Value | Method |
+|---|---|---|
+| Gzipped bundle, all `dist/` files | **~62 KB** (JS ~56 + CSS ~6 + HTML ~0.5) — 12 % of the 500 KB budget | `tests/build-output.spec.ts` (`node:zlib`, level 9) |
+| Blocking requests | HTML + **1** JS module + **1** CSS file. No web fonts (system + generic stack), no code-split chunks, **zero runtime dependencies**, no `fetch` on load. | `dist/index.html` inspection |
+| `npm run preview` first byte for `index.html` | **~5 ms** (localhost) | `curl -w '%{time_total}'` |
+| `GameApp` constructor synchronous work (`runMatch(seed, [], resolver, {maxRounds: 8})` — 8 rounds of real combat before first paint) | **~24 ms** mean (Node, this machine, 20 runs) | `runMatch` micro-bench |
+
+Cold path: HTML parse → fetch + parse one ~193 KB JS chunk (tens of ms) + one
+~28 KB CSS file → `new GameApp(...)` (~24 ms) → first DOM build (a few hundred
+nodes). On any network delivering the JS chunk in under ~1 s this is interactive
+well inside the 2 s budget. **A human should still run Lighthouse on the deployed
+URL and paste the median TTI below.**
+
+| Target | TTI (median of 3) | Tool | Date |
+|---|---|---|---|
+| `npm run preview` @ localhost, desktop | _pending human pass_ | DevTools Performance | |
+| Deployed Pages URL, Lighthouse mobile | _pending human pass_ | Lighthouse | |
+| Deployed Pages URL, Lighthouse desktop | _pending human pass_ | Lighthouse | |
+
+## 17-step end-to-end acceptance walk
+
+Run against the deployed URL (or `npm run preview` →
+`http://localhost:4173/battle-matrix/`), **with the matching screenshot open**.
+Legend: **T** verified by an automated test · **C** verified by code inspection ·
+**H** needs a human browser pass (visual / interaction).
+
+| # | Step | Status | Evidence |
+|---|---|---|---|
+| 1 | Draft: 18-hero pool of 6/6/6, `LINEUP (0/6)` fills to 6, timer counts down | **T** + H | `tests/data.spec.ts` (6/6/6 roster), `tests/ui-render.spec.ts` (draft renders; GameApp routes through it). H: the replica's pool is a grid, not a fanned arc (M8 note). |
+| 2 | Round `1-1` is Practice with **4** phase icons; header names the phase; start `◇10`, preview `(+16)` | **T** | `tests/match.spec.ts` (round 1 practice, 4 phases), `tests/economy.spec.ts` (10 tokens; `previewIncome` → `+16`), `tests/hud.spec.ts` (phase strip). |
+| 3 | Buy one module for `◇5` — slot empties, tokens `5`, preview `(+15)`, protocol meter ticks `1/10` | **T** | `tests/modules.spec.ts` (buy; slot empties; XP), `tests/economy.spec.ts` (`5 (+15)`), `tests/ui-actions.spec.ts`. |
+| 4 | `REFRESH` costs `1`; `LOCK` greys refresh and badges all four cards | **T** | `tests/modules.spec.ts` (`SHOP_REFRESH_COST` 1; lock/refresh), `tests/hud.spec.ts` (padlock on all four). |
+| 5 | Phase `1-2` `Select Position`: drag onto the 6×4 grid; placement persists into battle | **T** + H | `tests/ui-actions.spec.ts` + `tests/combat.spec.ts` (deployment applied), `tests/render.spec.ts` (persists to the battle ctx). H: drag feel. |
+| 6 | Phase `1-3`: Galacta Bots as monsters; fly the drone; fire `LSHIFT` / `E`, each greys; kill feed populates | **T** + H | `tests/drone.spec.ts` (one-time abilities fire once, reset next round), `tests/render.spec.ts` (Galacta monster token; ability buttons grey on the consume tick; kill feed). H: flying the drone. |
+| 7 | Phase `1-4` `SELECT REWARD`: **3** gold cards, `REFRESH 1/1` once, `Select 1 Strengthen Modules`, counter → `x1` | **T** | `tests/practice.spec.ts` (3 offers; single refresh; count), `tests/strengthen.spec.ts`. |
+| 8 | Round 2 is PvP with **3** phases; opponent name top-right | **T** | `tests/match.spec.ts` (round 2 battle, 3 phases), `tests/render.spec.ts` (opponent name; empty on PvE). |
+| 9 | Lose a round: health drops ~2–4; gain `+1 token per health lost` | **T** | `tests/match.spec.ts` (re-fitted `healthLoss` table), `tests/economy.spec.ts` (HP compensation +1/HP). **Note:** with the M11 HP-loss re-fit an early-round loss is ~2 HP (FIDELITY §3b). |
+| 10 | Reach 10 XP in one protocol: badge `1`, meter `/20`, tier-1 bonus cyan, rarity row off `100/0/0` | **T** | `tests/modules.spec.ts` (10 Commons ⇒ L1), `tests/hud.spec.ts` (meter/badge), `tests/display.spec.ts` (rarity odds off 100/0/0 at L1). |
+| 11 | Info pane: `XP n/20`, all three tiers, `★=+1 ★=+2 ★=+4` legend, Owned Modules list with **cumulative** values | **T** | `tests/ui-render.spec.ts` (info-pane VM), `tests/display.spec.ts` (`ownedValue` cumulative). |
+| 12 | `CHANGE HERO` for `◇5`: offers 3/6/3 by role; swap screen Reserve above Active; a Strengthen hero shows its pip; after confirm the modules return as selectable | **T** | `tests/modules.spec.ts` (3/6/3 offers; `swapHeroAndConvertStrengthen`), `tests/strengthen.spec.ts` (swap conversion invariant), `tests/ui-render.spec.ts` (Reserve/Active order; pip). |
+| 13 | `TAB`: scoreboard shows all six lineups, protocol levels, Strengthen counts, top-3 divider | **T** + C | `tests/ui-render.spec.ts` (`scoreboardVM`: 6 lineups; 4 levels + Strengthen count; `topCutoffIndex 3`). C: M11 Tab only toggles when focus is not in a control. |
+| 14 | Let a battle run long — **Speed Up Protocol** announces and damage jumps | **T** | `tests/combat.spec.ts` (Speed Up flips at the trigger tick; ×2.2 once), `tests/render.spec.ts` (banner iff `speedUpActive`). |
+| 15 | Play to an elimination: that player becomes a phantom and reads `Out of Play` | **T** | `tests/match.spec.ts` (elimination; `phantomLineup` frozen; `alive:false` thereafter), `tests/ui-render.spec.ts` (`Out of Play` row). |
+| 16 | Play to the end; placements 1–6 assigned, one player remains | **T** | `tests/match.spec.ts` (200-seed fuzz: one winner, placements {1..6}), `tests/replay.spec.ts` (5 committed full matches). |
+| 17 | Re-enter the same seed; the match replays identically | **T** | `tests/determinism.spec.ts` (100× same-seed replay → one boundary-hash sequence). In the UI the seed bar writes `#seed=<n>` and reload re-runs from that seed. |
+
+**Automated coverage: 17 / 17 steps have test or code evidence.** The
+**H**-flagged visual / interaction aspects (drag feel, flying the drone, the
+arc-fan draft layout, Lighthouse TTI, and confirming zero console errors on the
+live deploy) still want a human pass on the deployed build. Record it here.

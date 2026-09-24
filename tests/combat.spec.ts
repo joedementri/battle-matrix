@@ -218,40 +218,43 @@ describe('targeting', () => {
 // ---------------------------------------------------------------------------
 
 describe('1v1 hand-computed time-to-kill', () => {
-  it('Black Widow kills Hawkeye on the expected tick (no modules, no movement)', () => {
+  it('Hulk kills Magik on the expected tick (no modules, no movement)', () => {
     /*
-     * Black Widow: dps 115, attackSpeed 0.9, range 32, health 250.
-     *   per-hit = 115 / 0.9        = 127.7778
-     *   interval = round(30 / 0.9) = round(33.33) = 33 ticks  -> shots at tick 1, 34, ...
-     * Hawkeye:     dps 120, attackSpeed 0.8, range 34, health 250.
-     *   per-hit = 120 / 0.8        = 150
-     *   interval = round(30 / 0.8) = round(37.5) = 38 ticks   -> shots at tick 1, 39, ...
-     * Placed 20 apart -> both in range, neither moves. No modules -> no multipliers.
-     *   tick 1:  BW hits Hawkeye 250 -> 122.2222 ; Hawkeye hits BW 250 -> 100
-     *   tick 34: BW's 2nd shot -> Hawkeye 122.2222 - 127.7778 = -5.5556  => KO at tick 34,
-     *            BEFORE Hawkeye's 2nd shot at tick 39.
+     * M11 re-tune: the old Black Widow / Hawkeye pairing is now byte-identical
+     * (both 250-HP snipers -> same dps/attackSpeed) and 1v1s tie by construction,
+     * so this hand-computed test uses a cross-role pairing with a clear winner.
+     *
+     * Hulk:  dps 66, attackSpeed 1.0, range 15, health 700.
+     *   per-hit  = 66 / 1.0        = 66
+     *   interval = round(30 / 1.0) = 30 ticks   -> shots at tick 1, 31, 61, 91, ...
+     * Magik: dps 164, attackSpeed 2.5, range 20, health 250.
+     *   per-hit  = 164 / 2.5       = 65.6
+     *   interval = round(30 / 2.5) = 12 ticks   -> shots at tick 1, 13, 25, ...
+     * Placed 15 apart -> both in range, neither moves. No modules -> no multipliers.
+     *   Hulk on Magik:  tick 1 -> 184, tick 31 -> 118, tick 61 -> 52, tick 91 -> -14  => KO at 91.
+     *   Magik on Hulk:  8 hits by tick 91 = 524.8  => Hulk still at 175.2, alive.
      */
-    const trace = simulateBattle(makeCtx(1, ['black-widow'], ['hawkeye']), {
+    const trace = simulateBattle(makeCtx(1, ['hulk'], ['magik']), {
       place: (us) => {
         us[0]!.x = 0;
         us[0]!.y = 0;
         us[1]!.x = 0;
-        us[1]!.y = 20;
+        us[1]!.y = 15;
       },
     });
-    expect(trace.tickCount).toBeGreaterThanOrEqual(33);
-    expect(trace.tickCount).toBeLessThanOrEqual(35);
-    expect(trace.tickCount).toBe(34);
+    expect(trace.tickCount).toBeGreaterThanOrEqual(90);
+    expect(trace.tickCount).toBeLessThanOrEqual(92);
+    expect(trace.tickCount).toBe(91);
     expect(trace.outcome.result).toBe('win');
     expect(trace.outcome.survivingUnits).toBe(1);
     expect(trace.outcome.survivorsSideA).toBe(1);
     expect(trace.outcome.survivorsSideB).toBe(0);
     expect(trace.kills).toHaveLength(1);
     expect(trace.kills[0]).toMatchObject({
-      killerHeroId: 'black-widow',
-      victimHeroId: 'hawkeye',
+      killerHeroId: 'hulk',
+      victimHeroId: 'magik',
       weapon: 'primary',
-      tick: 34,
+      tick: 91,
     });
   });
 });
@@ -262,10 +265,11 @@ describe('1v1 hand-computed time-to-kill', () => {
 
 describe('Speed Up Protocol', () => {
   it('multiplies damage by exactly 2.2, from a flag, without compounding over a 300-tick phase', () => {
-    // doctor-strange (dps 62, as 1.1, range 16) vs magneto (dps 58, as 1.0, range 15), health 575/650.
-    // per-hit DS = 62/1.1 = 56.3636; interval round(30/1.1) = 27.
+    // M11 re-tune: doctor-strange (dps 80, as 1.0, range 15) vs magneto
+    // (dps 71, as 1.0, range 15), health 575/650. Placed 14 apart -> both in range.
+    // per-hit DS = 80/1.0 = 80; interval round(30/1.0) = 30 -> shots at 1, 31, 61, ...
     // Speed Up flipped at tick 10 -> every DS primary hit from tick 10 on should be
-    // exactly 56.3636 * 2.2, and STAY that (never 2.2^2, 2.2^3, ...).
+    // exactly 80 * 2.2, and STAY that (never 2.2^2, 2.2^3, ...).
     const trace = simulateBattle(makeCtx(2, ['doctor-strange'], ['magneto']), {
       trace: true,
       speedUpTriggerTicks: 10,
@@ -285,7 +289,7 @@ describe('Speed Up Protocol', () => {
     expect(pre.length).toBeGreaterThanOrEqual(1);
     expect(post.length).toBeGreaterThanOrEqual(3);
 
-    const perHit = 62 / 1.1;
+    const perHit = 80 / 1.0;
     for (const a of pre) expect(a).toBeCloseTo(perHit, 6);
     for (const a of post) expect(a).toBeCloseTo(perHit * 2.2, 6);
     // non-compounding: every post-trigger hit is the SAME value
@@ -374,8 +378,9 @@ describe('damage-taken reductions are multiplicative', () => {
      *   stats.ts folds these into damageTakenMultiplier = 0.58 * 0.79 = 0.4582.
      * Critical Damage Shell is forced active -> a further * (1 - 0.80).
      *   final = 0.4582 * 0.20 = 0.09164
-     * Hawkeye per-hit = 150 (no modules) -> applied hit = 150 * 0.09164 = 13.746.
-     * The ADDITIVE reading, 1 - (0.42 + 0.21 + 0.80) = -0.43, would "heal" for -64.5.
+     * M11 re-tune: Hawkeye per-hit = 164 / 2.5 = 65.6 (no modules)
+     *   -> applied hit = 65.6 * 0.09164 = 6.01158.
+     * The ADDITIVE reading, 1 - (0.42 + 0.21 + 0.80) = -0.43, would "heal" for -28.2.
      */
     const trace = simulateBattle(
       makeCtx(4, ['hawkeye'], ['groot', 'black-widow', 'mantis']),
@@ -403,8 +408,8 @@ describe('damage-taken reductions are multiplicative', () => {
     const firstOnGroot = trace.damageLog!.find((e) => e.srcUnitId === 0 && e.tgtUnitId === 1);
     expect(firstOnGroot).toBeDefined();
     expect(firstOnGroot!.amount).toBeGreaterThan(0);
-    expect(firstOnGroot!.amount).toBeCloseTo(150 * 0.4582 * 0.2, 3);
-    expect(firstOnGroot!.amount).not.toBeCloseTo(150 * (1 - (0.42 + 0.21 + 0.8)), 3);
+    expect(firstOnGroot!.amount).toBeCloseTo((164 / 2.5) * 0.4582 * 0.2, 3);
+    expect(firstOnGroot!.amount).not.toBeCloseTo((164 / 2.5) * (1 - (0.42 + 0.21 + 0.8)), 3);
   });
 });
 
@@ -635,7 +640,12 @@ describe('external actor input stream', () => {
 // ---------------------------------------------------------------------------
 
 describe('arena geometry', () => {
-  it('spawn distances make snipers engage almost immediately while melee / Strategists close ground', () => {
+  it('formation depth + range decide who has ground to close at spawn', () => {
+    // M11 re-tune: every Duelist is r20 and the sniper/ranged/melee split no
+    // longer differentiates spawn distance (all Duelists deploy on the same
+    // formation row). What still holds: formation DEPTH orders how far from the
+    // enemy a unit spawns (front-row Vanguard nearest, back-row Strategist
+    // furthest), and no unit is already in range at spawn — everyone closes.
     let spawn: { id: number; x: number; y: number; range: number; role: string; side: 0 | 1 }[] = [];
     simulateBattle(makeCtx(1, MIXED_A, MIXED_B), {
       tieCapTicks: 1,
@@ -654,13 +664,17 @@ describe('arena geometry', () => {
     const minEnemyDist = (u: (typeof spawn)[number]): number =>
       Math.min(...sideB.map((e) => dist(u, e)));
 
-    const bw = spawn.find((u) => u.id === 3)!; // black-widow, sniper (range 32)
-    const wolv = spawn.find((u) => u.id === 2)!; // wolverine, melee (range 5)
-    const mantis = spawn.find((u) => u.id === 4)!; // mantis, Strategist (range 20)
+    const capa = spawn.find((u) => u.id === 0)!; // captain-america, Vanguard, front row
+    const wolv = spawn.find((u) => u.id === 2)!; // wolverine, Duelist, mid
+    const mantis = spawn.find((u) => u.id === 4)!; // mantis, Strategist, back row
 
-    expect(minEnemyDist(bw) - bw.range).toBeLessThan(10); // ~1 s of movement into range
-    expect(minEnemyDist(wolv) - wolv.range).toBeGreaterThan(20); // seconds of closing
-    expect(minEnemyDist(mantis)).toBeGreaterThan(mantis.range); // not in range at spawn
+    // Nobody spawns already in range — every unit has ground to close.
+    for (const u of spawn.filter((s) => s.side === 0)) {
+      expect(minEnemyDist(u), `unit ${u.id}`).toBeGreaterThan(u.range);
+    }
+    // Formation depth orders the spawn distance: front Vanguard < mid Duelist < back Strategist.
+    expect(minEnemyDist(capa)).toBeLessThan(minEnemyDist(wolv));
+    expect(minEnemyDist(wolv)).toBeLessThan(minEnemyDist(mantis));
   });
 
   it('assignFormation keeps a side inside the 6-wide grid footprint and never on the enemy half', () => {

@@ -16,10 +16,13 @@
 
 import { CHANGE_HERO_COST, LINEUP_SIZE } from '../data/constants';
 import { PHASE_TIMERS_SECONDS, ROUND_CAP } from '../data/authored';
+import * as S from '../data/strings';
 import type { Protocol, Role } from '../data/types';
 import type { DeployCell } from '../sim/board';
 import { createCombatResolver } from '../sim/combat';
 import { humanBattleContext, runMatch } from '../sim/match';
+import { emptySide, resolveUnits } from '../sim/stats';
+import type { ResolvedUnit } from '../sim/stats';
 import { practiceRewardCount } from '../sim/practice';
 import { changeHeroOfferIds, humanRewardOffers } from '../sim/selectors';
 import type { Action, MatchResult, MatchState, PhaseKind } from '../sim/types';
@@ -95,6 +98,10 @@ export class GameApp {
 
   // M9 — battle renderer + live drone-input latch
   private battle: BattleRenderer | null = null;
+  // M11 — `?debug=1` overlay: resolved units for the current battle + the unit
+  // the viewer clicked to inspect. Read-only; nothing here reaches sim state.
+  private debugResolved: readonly ResolvedUnit[] = [];
+  private debugSelectedUnitId: number | null = null;
   private battleShopOpen = false;
   private droneRecordingCommitted = false;
   private droneControlMode = true;
@@ -252,6 +259,8 @@ export class GameApp {
     this.battle.dispose();
     this.battle = null;
     this.battleShopOpen = false;
+    this.debugResolved = [];
+    this.debugSelectedUnitId = null;
   }
 
   /** In-round "READY" — confirm early and show "Waiting for Others" while the timer runs. */
@@ -303,13 +312,24 @@ export class GameApp {
     this.stampDebug();
   }
 
-  /** `?debug` (URL hash) — live battle frame-timing readout in the corner. */
+  /** True iff the `?debug` / `#debug` flag is present. Inert (no overlay) otherwise. */
+  private debugOn(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      (/(^|[#&?])debug(=1)?(&|$)/.test(window.location.hash) ||
+        /(^|[#&?])debug(=1)?(&|$)/.test(window.location.search))
+    );
+  }
+
+  /**
+   * `?debug=1` overlay — tick count + frame timings (M9) PLUS the resolved stats
+   * of a clicked unit and a tail of M5's event streams (kills / revives / Speed
+   * Up / damage log), consumed read-only by cursor exactly like the kill feed.
+   * Nothing here computes anything that reaches sim state.
+   */
   private stampDebug(): void {
-    if (typeof window === 'undefined' || !/(^|[#&?])debug(=1)?(&|$)/.test(window.location.hash)) {
-      return;
-    }
     let el = this.host.querySelector('[data-bm-debug]') as HTMLElement | null;
-    if (this.battle === null) {
+    if (!this.debugOn() || this.battle === null) {
       el?.remove();
       return;
     }
@@ -318,14 +338,66 @@ export class GameApp {
       el.setAttribute('data-bm-debug', 'true');
       this.host.appendChild(el);
     }
-    const s = this.battle.stats();
-    el.textContent =
-      `tick ${this.battle.controllerRef.tick}  ticks ${s.ticks}  frames ${s.frames}\n` +
-      `frame ${s.avgFrameMs.toFixed(2)}ms (build ${s.avgBuildMs.toFixed(2)} draw ${s.avgDrawMs.toFixed(2)})  worst ${s.worstFrameMs.toFixed(1)}ms`;
+
+    const b = this.battle;
+    const s = b.stats();
+    const ctrl = b.controllerRef;
+    const lines: string[] = [];
+    lines.push(
+      `${S.DEBUG_TITLE}  tick ${ctrl.tick}  ${S.DEBUG_TICKS} ${s.ticks}  ${S.DEBUG_FRAMES} ${s.frames}` +
+        (ctrl.speedUpActive ? `  ${S.DEBUG_SPEED_UP}` : ''),
+    );
+    lines.push(
+      `frame ${s.avgFrameMs.toFixed(2)}ms (build ${s.avgBuildMs.toFixed(2)} draw ${s.avgDrawMs.toFixed(2)})  worst ${s.worstFrameMs.toFixed(1)}ms`,
+    );
+
+    lines.push(`── ${S.DEBUG_RESOLVED_STATS} ──`);
+    const sel = this.debugSelectedUnitId;
+    const ru = sel !== null ? this.debugResolved[sel] : undefined;
+    if (ru === undefined) {
+      lines.push(`  ${S.DEBUG_NO_SELECTION}`);
+    } else {
+      lines.push(`  #${sel} ${ru.heroId} (${ru.role})`);
+      lines.push(
+        `  maxHealth ${ru.maxHealth}  bonus ${ru.bonusHealth}  start ${ru.startingHealth}`,
+      );
+      lines.push(
+        `  dps ${ru.dps}  perHit ${(ru.dps / ru.attackSpeed).toFixed(1)}  range ${ru.attackRange}  as ${ru.attackSpeed}`,
+      );
+      if (ru.healPerSecond > 0) lines.push(`  heal/s ${ru.healPerSecond}`);
+      lines.push(
+        `  dmgTaken× ${ru.damageTakenMultiplier}  ultCharge× ${ru.ultChargeRate}  lifesteal ${ru.lifestealPct}%`,
+      );
+      if (ru.roundStartDamagePct !== 0 || ru.roundStartHealingPct !== 0) {
+        lines.push(
+          `  round-start +dmg ${ru.roundStartDamagePct}%  +heal ${ru.roundStartHealingPct}%`,
+        );
+      }
+      lines.push(`  effects: ${ru.effects.length > 0 ? ru.effects.join(', ') : '—'}`);
+    }
+
+    lines.push(`── ${S.DEBUG_EVENT_LOG} ──`);
+    const events = b.eventLog(10);
+    if (events.length === 0) lines.push('  —');
+    else for (const line of events) lines.push(`  ${line}`);
+
+    el.textContent = lines.join('\n');
   }
 
   private readonly onGlobalKey = (event: KeyboardEvent): void => {
     if (event.key === 'Tab') {
+      // M11 accessibility — reconcile Tab-scoreboard with keyboard navigation.
+      // Tab toggles the scoreboard ONLY when focus is not inside an interactive
+      // control (the "just watching" state). While the viewer is tabbing through
+      // the shop / board / seed bar, Tab traverses focus normally. Decision
+      // recorded in docs/QA.md.
+      const ae = document.activeElement;
+      const inControl =
+        ae instanceof HTMLElement &&
+        ae !== document.body &&
+        ae.closest('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"]), [role="button"]') !==
+          null;
+      if (inControl) return; // let the browser move focus
       event.preventDefault();
       this.cb.toggleScoreboard();
       return;
@@ -588,6 +660,17 @@ export class GameApp {
         { kind: mine.kind, a: mine.a, b: mine.b },
         null,
       );
+      // M11 debug overlay — the resolved units combat is about to run, in
+      // `field.units` id order (side A first, then side B). Pure, read-only.
+      const modA = ctx.sideA.modules ?? emptySide();
+      const modB = ctx.sideB.modules ?? emptySide();
+      this.debugResolved = ctx.sideB.isGalactaBots
+        ? resolveUnits(ctx.sideA.lineup, modA, [], emptySide())
+        : [
+            ...resolveUnits(ctx.sideA.lineup, modA, ctx.sideB.lineup, modB),
+            ...resolveUnits(ctx.sideB.lineup, modB, ctx.sideA.lineup, modA),
+          ];
+      this.debugSelectedUnitId = null;
       this.battle = new BattleRenderer(host, {
         ctx,
         humanPlayerId: this.humanId,
@@ -639,6 +722,12 @@ export class GameApp {
       if (hit === 'ability-damage') this.clickDamage = true;
       else if (hit === 'ability-heal') this.clickHeal = true;
       else this.pointerBeam = true;
+      // M11 — in `?debug=1`, a click on a unit selects it for the resolved-stats
+      // panel. Read-only; runs alongside (never instead of) the beam gesture.
+      if (this.debugOn() && hit === null) {
+        const uid = this.battle?.pickUnitAt(e.offsetX, e.offsetY);
+        if (uid !== null && uid !== undefined) this.debugSelectedUnitId = uid;
+      }
     });
     canvas.addEventListener('pointerup', () => {
       this.pointerBeam = false;

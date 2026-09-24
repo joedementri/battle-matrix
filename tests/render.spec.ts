@@ -167,6 +167,72 @@ describe('kill feed', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. prefers-reduced-motion — damage numbers + interpolation (M11)
+// ---------------------------------------------------------------------------
+
+describe('prefers-reduced-motion (M11)', () => {
+  const frame = (): BattleFrameState =>
+    deepFreeze({
+      tick: 5,
+      speedUpActive: false,
+      speedUpStartedAtTick: null,
+      bounds: { minX: -18, maxX: 18, minY: -18, maxY: 42 },
+      units: [
+        { id: 0, side: 0, slot: 0, heroId: 'magik', isGalactaBot: false, role: 'duelist', alive: true, health: 100, overhealth: 0, maxHealth: 250, startTotalHealth: 250, ultEnergy: 0, ultCasts: 0, targetId: -1, x: 0, y: 0 },
+      ],
+      drones: [],
+    } as BattleFrameState);
+
+  it('damage numbers: no upward drift and no fade under reduced motion; both applied without it', () => {
+    const dmg = new DamageNumbers();
+    dmg.consume(
+      [{ tick: 5, srcUnitId: 1, tgtUnitId: 0, amount: 42, source: 'primary', convertedToHeal: false }],
+      frame(),
+      5,
+    );
+    const mid = 5 + 15; // half-life
+
+    const normal = dmg.active(mid, false)[0]!;
+    expect(normal.rise).toBeGreaterThan(0);
+    expect(normal.opacity).toBeLessThan(1);
+
+    const reduced = dmg.active(mid, true)[0]!;
+    expect(reduced.rise).toBe(0);
+    expect(reduced.opacity).toBe(1);
+  });
+
+  it('BattleRenderer snaps to the latest tick (alpha 1) under reduced motion', () => {
+    const spied: number[] = [];
+    const r = new BattleRenderer(document.createElement('div'), {
+      ctx: makeCtx(7),
+      humanPlayerId: 0,
+      playerName: 'you',
+      opponentName: 'foe',
+      sampleInput: (): RawDroneInput => ({
+        dirX: 0,
+        dirY: 0,
+        beam: false,
+        pressDamage: false,
+        pressHeal: false,
+        droneControl: true,
+      }),
+      manualClock: true,
+      reducedMotion: true,
+    });
+    const orig = r.buildFrame.bind(r);
+    r.buildFrame = (alpha: number) => {
+      spied.push(alpha);
+      return orig(alpha);
+    };
+    // Advance by a fraction of a tick so loop.alpha would be < 1 without the override.
+    r.advance(1000 / 90);
+    r.dispose();
+    expect(spied.length).toBeGreaterThan(0);
+    expect(spied.every((a) => a === 1)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. Fixed-timestep loop — tick count is a function of elapsed time alone
 // ---------------------------------------------------------------------------
 

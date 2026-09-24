@@ -47,3 +47,33 @@ describe('src/ui/theme.css — colour tokens', () => {
     expect(rootBlock).toMatch(/--bm-accent\s*:\s*#ffc800/i);
   });
 });
+
+describe('M11 accessibility — colour-blind assist is an override layer, not a recolour', () => {
+  // The whole CB section: from its banner comment to the toggle-widget rule.
+  const start = CSS.indexOf('Colour-blind assist (M11)');
+  const end = CSS.indexOf('.bm-cb-toggle');
+  const block = start >= 0 && end > start ? CSS.slice(start, end) : '';
+
+  it('ships a :root[data-cb="1"] override layer', () => {
+    expect(block).not.toBe('');
+    expect((block.match(/\[data-cb='1'\]/g) ?? []).length).toBeGreaterThan(6);
+  });
+
+  it('reinforces role / protocol with SHAPE, PATTERN and TEXT — never a new colour', () => {
+    // shape / pattern / text reinforcement is present …
+    expect(block).toMatch(/border-style:\s*(dashed|dotted|double)/);
+    expect(block).toMatch(/clip-path:/);
+    expect(block).toMatch(/content:\s*attr\(data-role\)/);
+    expect(block).toMatch(/stroke-width:/);
+    // … and NO hex colour is introduced inside the CB layer (canonical tokens
+    // stay the single source of truth; the layer only ever reads var(--bm-*)).
+    expect(block, 'the CB override layer must not introduce a hex colour').not.toMatch(
+      /#[0-9a-f]{3,8}\b/i,
+    );
+  });
+
+  it('the hero token carries a non-colour role cue (data-role) for the CB chip', () => {
+    const token = readFileSync(join(process.cwd(), 'src', 'ui', 'heroToken.ts'), 'utf8');
+    expect(token).toMatch(/'data-role':\s*art\.displayRole/);
+  });
+});

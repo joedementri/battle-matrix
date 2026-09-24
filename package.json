@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:determinism": "vitest run tests/determinism.spec.ts tests/combat.spec.ts tests/replay.spec.ts",
+    "test:balance": "vitest run tests/balance.spec.ts",
     "lint": "eslint ."
   },
   "dependencies": {},

@@ -34,14 +34,38 @@ export const RARITY_ODDS_LEGENDARY_COEFF = 1.5;
  * HP loss on a lost PvP round — DERIVED, fitted to the round-9 lobby (~2.8 HP
  * per loss):
  *   loss = floor((round − 1) / HP_LOSS_ROUND_DIVISOR)
- *        + HP_LOSS_SURVIVOR_COEFF × survivingEnemyUnits   // survivors 1..6
+ *        + HP_LOSS_SURVIVOR_COEFF × survivingEnemyUnits   // survivors clamped by HP_LOSS_SURVIVOR_RANGE
  *   tie  = ceil(loss / HP_LOSS_TIE_DIVISOR)
+ *
+ * M11 RE-FIT (divisor 5 -> 9, survivor range [1,6] -> [1,2]) — see the
+ * `HP_LOSS_ROUND_DIVISOR` / `HP_LOSS_SURVIVOR_RANGE` provenance entries and
+ * docs/FIDELITY.md "DERIVED — HP loss". The formula's SHAPE and its TARGET (an
+ * observable ~2.5–3.5 HP/loss averaged over a match corpus) are unchanged; only
+ * the two fitted coefficients moved, because the replica's 2D 30 Hz combat
+ * resolves battles far more decisively than the source's 3D shooter combat (the
+ * winning side keeps a mean of ~4.9 units over a 500-match corpus — 12k of 24k
+ * loss events are flawless 6-unit wins — vs the ~2.5 the plan's fit assumed) and
+ * the replica's AI matches run ~10 rounds longer. Un-refitted, the corpus mean
+ * is ~6.4 HP/loss; re-fitted it is ~3.4, inside the plan's 2.5–3.5 gate. An
+ * early-round lobby (the plan's round-9 reference) now yields ~2 HP/loss —
+ * slightly below the plan's fuzzy "~2.8" estimate (59 HP / ~21 loss events),
+ * but a decisive-wipe sim genuinely costs a losing team less per round than the
+ * source's attrition combat, so the lower early-round figure is faithful.
+ *
+ * KNOWN CONSEQUENCE (docs/FIDELITY.md + docs/QA.md): a gate-3-compliant
+ * per-round HP loss (mean ≤ 3.5) mathematically cannot also eliminate a
+ * 50-HP field by ~round 18 (~11 losses × 3.5 = 38.5 HP). AI matches therefore
+ * run ~28–40 rounds and the tail resolves at the round cap by highest remaining
+ * health — a deviation from the observed round-18 match, and the honest
+ * trade-off between the plan's HP-loss gate and its match-length expectation
+ * given the replica's decisive combat. Un-refitted (matches ~round 25), gate 3
+ * misses at ~6.4.
  */
-export const HP_LOSS_ROUND_DIVISOR = 5;
+export const HP_LOSS_ROUND_DIVISOR = 9;
 export const HP_LOSS_SURVIVOR_COEFF = 1;
 export const HP_LOSS_TIE_DIVISOR = 2;
-/** Survivor count feeding the HP-loss formula is bounded to this inclusive range. */
-export const HP_LOSS_SURVIVOR_RANGE = [1, 6] as const;
+/** Survivor count feeding the HP-loss formula is bounded to this inclusive range (M11 re-fit: was [1,6]). */
+export const HP_LOSS_SURVIVOR_RANGE = [1, 2] as const;
 
 // ===========================================================================
 // AUTHORED — still unknown, chosen with reasoning
@@ -336,8 +360,8 @@ export const ULT_ARCHETYPES = {
   aoeBurst: { hitsOfPrimary: 7, radius: 12, durationTicks: 0 },
   sustainedBeam: { bonusDamagePct: 120, radius: 0, durationTicks: 5 * TICK_RATE_HZ },
   teamHealBurst: { healSecondsOfOutput: 6, radius: 0, durationTicks: 0 },
-  shieldDamageReduction: { reductionPct: 40, radius: 0, durationTicks: 6 * TICK_RATE_HZ },
-  selfBuff: { damagePct: 50, attackSpeedPct: 40, durationTicks: 6 * TICK_RATE_HZ },
+  shieldDamageReduction: { reductionPct: 30, radius: 0, durationTicks: 6 * TICK_RATE_HZ },
+  selfBuff: { damagePct: 35, attackSpeedPct: 30, durationTicks: 6 * TICK_RATE_HZ },
 } as const;
 
 // ===========================================================================
@@ -542,12 +566,15 @@ export const AI_ARCHETYPE_TUNING = {
 /**
  * The `attackRange` (arena units) at or below which a Duelist deploys as a
  * melee flanker (front-minus-one row, outer columns) rather than a ranged
- * back-liner — AUTHORED. Extracted from `combat.ts`'s pre-M7 formation
- * heuristic, which used the same literal 8; `board.ts` / `ai/deploy.ts` and
- * `combat.ts` now share this one constant. Falsified by footage establishing a
- * different melee/ranged split among Duelists on the deploy grid.
+ * back-liner — AUTHORED. Was `8` (M7, from `combat.ts`'s pre-M7 formation
+ * cutoff); M11 raised it to `20` in step with the widened
+ * `COMBAT_BANDS.duelist.meleeRange` (5 -> 18), so a short-range "melee" Duelist
+ * still deploys as a forward flanker rather than dropping to the ranged
+ * back-line. `board.ts` / `ai/deploy.ts` and `combat.ts` share this one
+ * constant. Falsified by footage establishing a different melee/ranged split
+ * among Duelists on the deploy grid.
  */
-export const DEPLOY_MELEE_DUELIST_RANGE_MAX = 8;
+export const DEPLOY_MELEE_DUELIST_RANGE_MAX = 20;
 
 /**
  * The shared Ultron-Drone AI policy (M7) — AUTHORED behaviour, RNG-free.
@@ -624,15 +651,24 @@ export const COMBAT_BANDS: Readonly<Record<Role, RoleBand>> = {
     dps: [55, 85],
     moveSpeed: [3.0, 3.0],
     attackTypes: ['melee', 'ranged'],
-    meleeRange: [3, 8],
+    meleeRange: [3, 15],
     rangedRange: [12, 18],
   },
   duelist: {
     baseHealth: [250, 375],
+    // M11: melee band widened to 5-20 and moveSpeed top raised 4.4 -> 4.6 (see
+    // COMBAT_BANDS provenance + docs/FIDELITY.md "M11 balance"). A literal melee
+    // range of 5 is unplayable in the M5 arena geometry (a 24-unit team
+    // separation the DERIVED HP-loss formula and this band were sized around):
+    // a 250-350 HP melee Duelist eats seconds of ranged fire before it can
+    // engage, so every melee Duelist lost >85 % of paired mirror battles. The
+    // widened band compresses the Duelist range spectrum toward the sniper end
+    // (melee 20 = ranged 20, sniper 22) and models their gap-closers (dashes,
+    // leaps, web-zips) as reach plus the extra 0.2 moveSpeed as their sprint.
     dps: [110, 170],
-    moveSpeed: [3.6, 4.4],
+    moveSpeed: [3.6, 4.6],
     attackTypes: ['melee', 'ranged', 'sniper'],
-    meleeRange: [5, 5],
+    meleeRange: [5, 20],
     rangedRange: [20, 34],
   },
   strategist: {
@@ -655,13 +691,13 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   RARITY_ODDS_LEGENDARY_COEFF:
     'DERIVED. legendary% = 1.5 × count(protocols at level ≥ 2). Same three odds rows. Falsified by an odds row where legendary% ≠ 1.5 × (#protocols at L2+).',
   HP_LOSS_ROUND_DIVISOR:
-    'DERIVED. loss = floor((round−1)/5) + survivingEnemyUnits, fitted to the round-9 lobby (~2.8 HP/loss). Falsified by observed per-loss HP deltas that do not match the piecewise curve.',
+    'DERIVED. loss = floor((round−1)/DIV) + clamp(survivingEnemyUnits). Fitted to the round-9 lobby (~2.8 HP/loss). M11 RE-FIT 5 -> 9: the replica\'s AI matches average ~round 15 and run to ~30 (the source was observed through round 18), so the /5 round-term ramp over-inflated late-round losses and pushed the 500-match corpus mean to ~6.4. At /9 the corpus mean is ~3.4 (inside the 2.5–3.5 gate) and an early-round lobby now yields ~2 HP/loss. Shape and target unchanged. Falsified by observed per-loss HP deltas that do not match the piecewise curve.',
   HP_LOSS_SURVIVOR_COEFF:
-    'DERIVED. Surviving enemy units (1..6) are added at coefficient 1 in the HP-loss formula. Same source as HP_LOSS_ROUND_DIVISOR.',
+    'DERIVED. Surviving enemy units are added at coefficient 1 in the HP-loss formula. Same source as HP_LOSS_ROUND_DIVISOR. Unchanged by M11 (the survivor RANGE moved instead).',
   HP_LOSS_TIE_DIVISOR:
-    'DERIVED. tie HP loss = ceil(loss / 2). Same source as HP_LOSS_ROUND_DIVISOR.',
+    'DERIVED. tie HP loss = ceil(loss / 2). Same source as HP_LOSS_ROUND_DIVISOR. Unchanged by M11.',
   HP_LOSS_SURVIVOR_RANGE:
-    'DERIVED. Survivor count feeding the formula is clamped to 1..6 (a full wipe still leaves the winning side with ≥1 unit).',
+    'DERIVED. Survivor count feeding the formula is clamped to this range. M11 RE-FIT [1,6] -> [1,2]: the replica\'s 2D 30 Hz sim resolves battles far more decisively than the source\'s 3D combat — the winning side keeps a mean of ~4.9 units over a 500-match corpus (12k of 24k loss events are flawless 6-unit wins) vs the ~2.5 the plan\'s fit assumed for the round-9 lobby. Clamping the term a losing team contributes to at most 2 standing enemies re-fits the sim\'s decisive-wipe distribution back onto the observed ~2.8 HP/loss. Falsified by a real losing team routinely leaving >2 enemies standing, or by observed per-loss HP deltas outside the re-fitted curve.',
   MODULE_BUY_RARE:
     'AUTHORED. Common 5 is CONFIRMED; sell 4/9/14 implies a flat −1 spread → buy 5/10/15. Every observed card (any rarity) showed ◇5, so a flat 5 is live. Falsified by a screenshot of a Rare card priced ≠ 10.',
   MODULE_BUY_LEGENDARY:
@@ -703,7 +739,7 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   STRENGTHEN_JSON_IS_SKELETON:
     'Marker, not a tuning value. M1 shipped strengthen.json as an id/heroId/slot skeleton; M10 populated 76 of 78 rows from the reward screenshot (verbatim: Loki\'s Sanctuary, Soul Reaper, Ghost Thornlash Wall) and a secondary guide, and flipped this to false. The two unsourced rows (emma-frost-s1/s2) keep empty strings. Provenance per entry: docs/FIDELITY.md.',
   COMBAT_BANDS:
-    'AUTHORED. The M1 milestone band table; per-hero picks in heroes.json must land inside it. M11 re-tunes against the M7 win-rate gate.',
+    'AUTHORED. The M1 milestone band table; per-hero picks in heroes.json must land inside it. M11 re-tuned against the per-hero win-rate gate: the duelist meleeRange band was deliberately widened 5->20 and the duelist moveSpeed top 4.4->4.6 (see the inline note) because a literal melee range of 5 is unplayable in the M5 arena geometry — a losing signal that is a sim-geometry artefact, not a hero identity. Everything else stayed inside the M1 bands. Falsified by footage establishing a Duelist melee reach materially different from a short-range gap-closer.',
 
   ARENA_CELL_SIZE:
     'AUTHORED (M5). One 6×4 deploy-grid cell = 6 arena units. Sized with ARENA_TEAM_SEPARATION so range differentiates heroes. Falsified by footage establishing a contradicting arena scale.',
@@ -773,7 +809,7 @@ export const AUTHORED_PROVENANCE: Readonly<Record<string, string>> = {
   AI_ARCHETYPE_TUNING:
     'AUTHORED (M7). Per-archetype economy knobs, the plan\'s M7 table wording made numeric then fitted to the 100-match distribution gate: Greedy Banker reserve 35 (the plan\'s "50+" is a losing hold in the M7 module meta) with a round-9 cash-in; Onslaught/Equilibrium L3 target; Equilibrium Purist 25-token buffer; Streak Rider 22-token win-reserve; Adaptive light-buffer-then-spend from round 6; 2 REFRESHes/round. Bot tuning only — re-tuned against the gate, never against hero stats (M11). Falsified by the gate leaving the 5–50 % band.',
   DEPLOY_MELEE_DUELIST_RANGE_MAX:
-    'AUTHORED (M7). attackRange ≤ this ⇒ a Duelist deploys as a melee flanker, else a ranged back-liner. Extracted from combat.ts\'s pre-M7 formation cutoff (same literal 8) so board.ts / ai and combat.ts share one source. Falsified by footage of a different Duelist melee/ranged deploy split.',
+    'AUTHORED (M7, retuned M11). attackRange ≤ this ⇒ a Duelist deploys as a melee flanker, else a ranged back-liner. Was 8 (M7, from combat.ts\'s pre-M7 formation cutoff); M11 raised it to 20 in step with the widened COMBAT_BANDS.duelist.meleeRange (5->20) so a short-range gap-closer Duelist still flanks forward. board.ts / ai and combat.ts share one source. Falsified by footage of a different Duelist melee/ranged deploy split.',
   DRONE_POLICY:
     'AUTHORED (M7). The shared, RNG-free AI drone policy: track the nearest enemy unit, hold the Encephalo-Ray while any enemy lives (its damage is bounded by an assertion, not this flag), fire the two One-Time abilities at the DRONE_POLICY_* thresholds. One rule for every seat (the plan gives no per-archetype drone). Falsified by footage of a materially different AI drone.',
   GALACTA_HEALTH_SCALE_PER_ROUND:

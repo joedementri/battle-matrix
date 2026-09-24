@@ -85,24 +85,28 @@ describe('round & phase model', () => {
 // ---------------------------------------------------------------------------
 
 describe('DERIVED HP-loss formula', () => {
-  it('loss = floor((round-1)/5) + survivors; tie = ceil(loss/2)', () => {
-    expect(healthLoss(2, 3, false)).toBe(3); // 0 + 3
-    expect(healthLoss(5, 3, false)).toBe(3); // 0 + 3
-    expect(healthLoss(6, 3, false)).toBe(4); // 1 + 3
-    expect(healthLoss(11, 6, false)).toBe(8); // 2 + 6
-    expect(healthLoss(40, 1, false)).toBe(8); // 7 + 1
+  // M11 RE-FIT (deliberate — see authored.ts HP_LOSS_* provenance +
+  // docs/FIDELITY.md "DERIVED — HP loss"): divisor 5 -> 9, survivor range
+  // [1,6] -> [1,2]. Formula shape unchanged: loss = floor((round-1)/9) +
+  // clamp(survivors, 1, 2); tie = ceil(loss/2).
+  it('loss = floor((round-1)/9) + clamp(survivors, 1, 2); tie = ceil(loss/2)', () => {
+    expect(healthLoss(2, 2, false)).toBe(2); // floor(1/9)=0 + 2
+    expect(healthLoss(9, 2, false)).toBe(2); // floor(8/9)=0 + 2
+    expect(healthLoss(6, 3, false)).toBe(2); // 0 + min(2,3)
+    expect(healthLoss(11, 6, false)).toBe(3); // floor(10/9)=1 + min(2,6)
+    expect(healthLoss(40, 1, false)).toBe(5); // floor(39/9)=4 + 1
 
-    expect(healthLoss(2, 4, true)).toBe(2); // ceil(4/2)
-    expect(healthLoss(6, 3, true)).toBe(2); // ceil(4/2)
-    expect(healthLoss(7, 5, true)).toBe(3); // ceil((1+5)/2)
+    expect(healthLoss(2, 4, true)).toBe(1); // ceil((0 + 2) / 2)
+    expect(healthLoss(9, 3, true)).toBe(1); // ceil((0 + 2) / 2)
+    expect(healthLoss(17, 5, true)).toBe(2); // ceil((floor(16/9)=1 + 2) / 2)
   });
 
-  it('survivor count is clamped to the canonical 1..6 range', () => {
+  it('survivor count is clamped to the re-fitted 1..2 range', () => {
     expect(clampSurvivors(0)).toBe(1);
-    expect(clampSurvivors(99)).toBe(6);
-    expect(clampSurvivors(3.4)).toBe(3);
+    expect(clampSurvivors(99)).toBe(2);
+    expect(clampSurvivors(1.4)).toBe(1);
     expect(healthLoss(2, 0, false)).toBe(1); // clamped to 1
-    expect(healthLoss(2, 50, false)).toBe(6); // clamped to 6
+    expect(healthLoss(2, 50, false)).toBe(2); // clamped to 2
   });
 });
 
@@ -439,19 +443,23 @@ describe('matchup coverage', () => {
 // ---------------------------------------------------------------------------
 
 describe('elimination & placement', () => {
-  it('a player forced to lose every PvP round hits 0 on the expected round with the expected placement', () => {
+  it('a player forced to lose every PvP round is eliminated first and placed 6th', () => {
+    // M11 re-fit: the exact elimination round is no longer hand-asserted (the
+    // DERIVED HP-loss coefficients moved — see the "DERIVED HP-loss formula"
+    // block above). The structural facts are what matter: the forced loser is
+    // the first (and, here, only pre-final) elimination, so it takes last place.
     const res = runMatch(2024, [], forcedResolver({ loserId: 3, survivors: 6 }));
     const p3 = res.finalState.players[3]!;
 
-    // Hand-computed: 50 HP, loses floor((r-1)/5)+6 each PvP round.
-    //  r2..r5: 6,6,6,6 -> 26 ; r6 PvE -> 26 ; r7..r9: 7,7,7 -> 5 ; r10: 7 -> -2
-    expect(p3.eliminatedRound).toBe(10);
-    expect(p3.eliminationHealth).toBe(-2);
-    expect(p3.health).toBe(0);
     expect(p3.alive).toBe(false);
-    // Nobody else was out by round 10, so livingAfter = 5 => placement 6.
+    expect(p3.health).toBe(0);
+    expect(p3.eliminationHealth).toBeLessThanOrEqual(0);
+    expect(p3.eliminatedRound).toBeGreaterThan(1);
+    // Nobody else was out before it, so livingAfter = 5 => placement 6.
     expect(p3.placement).toBe(6);
     expect(p3.lastRoundResult).toBe('loss');
+    // It really did outlast the old /5 formula's round-10 death (re-fit slows the drain).
+    expect(p3.eliminatedRound).toBeGreaterThan(10);
   });
 
   it('placements across a finished match are exactly {1..6}, distinct, with one winner', () => {
@@ -484,16 +492,24 @@ describe('elimination & placement', () => {
   });
 
   it('a simultaneous wipe of all six the same round gives distinct 1..6 by the id tiebreak', () => {
-    // Every PvP matchup ties with 6 survivors; by round 18 the tie loss (5/round
-    // for a while) has taken everyone from 50 to exactly -4 on the same round.
+    // Every PvP matchup ties with 6 survivors; the tie loss drains everyone from
+    // 50 to the same negative health on the same round. M11 re-fit: the exact
+    // round / elimination-health are read from the run rather than hand-asserted
+    // (the DERIVED coefficients moved); the invariant — a SIMULTANEOUS wipe with
+    // IDENTICAL health, so the id tiebreak yields placement == id + 1 — is what
+    // this test guards.
     const allTieBig: CombatResolver = {
       resolve: () => ({ result: 'tie', survivingUnits: 6 }),
     };
     const { finalState } = runMatch(4242, [], allTieBig);
     expect(finalState.status).toBe('complete');
+    const round0 = finalState.players[0]!.eliminatedRound;
+    const health0 = finalState.players[0]!.eliminationHealth;
+    expect(round0).not.toBeNull();
+    expect(health0).toBeLessThanOrEqual(0);
     for (const p of finalState.players) {
-      expect(p.eliminatedRound, `p${p.id} round`).toBe(18);
-      expect(p.eliminationHealth, `p${p.id} elim health`).toBe(-4);
+      expect(p.eliminatedRound, `p${p.id} round`).toBe(round0);
+      expect(p.eliminationHealth, `p${p.id} elim health`).toBe(health0);
       expect(p.health).toBe(0);
       expect(p.alive).toBe(false);
     }
@@ -505,15 +521,22 @@ describe('elimination & placement', () => {
 
   it('a player at <= 0 HP thereafter reads as out of play (alive=false, phantomLineup frozen)', () => {
     const res = runMatch(2024, [], forcedResolver({ loserId: 3, survivors: 6 }));
-    const eliminationBoundary = res.boundaries.find(
-      (b) => b.kind === 'battle' && b.round === 3 + 7 && b.state.players[3]!.alive === false,
-    );
-    // just assert the invariant on the final state:
     const p3final = res.finalState.players[3]!;
     expect(p3final.alive).toBe(false);
     expect(p3final.phantomLineup).not.toBeNull();
     expect(p3final.phantomLineup).toHaveLength(6);
-    expect(eliminationBoundary).toBeDefined();
+
+    // From the elimination boundary onward, p3 stays alive:false with a frozen
+    // phantom lineup. (M11 re-fit: the elimination round is found from the run,
+    // not hard-coded to round 10.)
+    const elimBoundaryIdx = res.boundaries.findIndex(
+      (b) => b.kind === 'battle' && b.state.players[3]!.alive === false,
+    );
+    expect(elimBoundaryIdx).toBeGreaterThan(0);
+    for (const b of res.boundaries.slice(elimBoundaryIdx)) {
+      expect(b.state.players[3]!.alive, `@${b.label}`).toBe(false);
+      expect(b.state.players[3]!.phantomLineup, `@${b.label}`).toHaveLength(6);
+    }
   });
 });
 

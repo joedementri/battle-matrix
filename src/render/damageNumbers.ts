@@ -77,8 +77,13 @@ export class DamageNumbers {
     if (this.live.length > DMG_MAX_LIVE) this.live = this.live.slice(-DMG_MAX_LIVE);
   }
 
-  /** The numbers to draw at `nowTick`, oldest first, with rise + fade applied. */
-  active(nowTick: number): FloatingDamage[] {
+  /**
+   * The numbers to draw at `nowTick`, oldest first, with rise + fade applied.
+   * `reducedMotion` (M11 accessibility): no upward drift and a single hard
+   * opacity step — the number appears for its whole life at full opacity, then
+   * vanishes, instead of gliding and fading.
+   */
+  active(nowTick: number, reducedMotion = false): FloatingDamage[] {
     const out: FloatingDamage[] = [];
     for (const l of this.live) {
       const age = nowTick - l.bornTick;
@@ -91,8 +96,8 @@ export class DamageNumbers {
         text: l.text,
         heal: l.heal,
         crit: l.crit,
-        rise: t * DMG_RISE_PX,
-        opacity: 1 - t,
+        rise: reducedMotion ? 0 : t * DMG_RISE_PX,
+        opacity: reducedMotion ? 1 : 1 - t,
       });
     }
     return out;

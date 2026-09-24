@@ -6,7 +6,14 @@ import { emptySide, resolveUnits } from '../src/sim/stats';
 import type { SideModules } from '../src/sim/stats';
 
 /*
- * The golden regression net M11 balances against — broad on purpose: several
+ * The golden regression net M11 balances against — broad on purpose.
+ *
+ * M11 (deliberate — see docs/FIDELITY.md "AUTHORED — combat"): every hand-
+ * computed hero stat below was updated to the re-tuned heroes.json numbers, and
+ * the golden snapshot was regenerated (`vitest -u`). Aggregation-ORDER coverage
+ * (the traps the test exists for) is unchanged.
+ *
+ * broad on purpose: several
  * lineups, several module stacks, both the health and the damage paths, plus
  * the two order-sensitive traps the plan calls out explicitly:
  *   - health: flat additive (incl. level bonuses) -> PERCENT multiplier ->
@@ -111,12 +118,12 @@ describe('damage: ally % sums in one bracket; protocol level bonus and enemy int
     // steady-state bracket only: Damage Enhancement (+16%) alone.
     const soloOwned: OwnedModule[] = [{ moduleId: 'onslaught-damage-enhancement', stars: 2 }];
     const [unit] = resolveUnits(['hawkeye'], side(soloOwned), [], emptySide());
-    expect(unit!.dps).toBeCloseTo(120 * 1.16, 6); // Hawkeye baseDps 120
+    expect(unit!.dps).toBeCloseTo(164 * 1.16, 6); // Hawkeye baseDps 164 (M11 re-tune)
 
     // sanity: the round-start module lands in roundStartDamagePct, not dps
     const [unitWithRoundStart] = resolveUnits(['hawkeye'], side(owned), [], emptySide());
     expect(unitWithRoundStart!.roundStartDamagePct).toBeCloseTo(20, 6);
-    expect(unitWithRoundStart!.dps).toBeCloseTo(120 * 1.16, 6); // unaffected by the round-start bucket
+    expect(unitWithRoundStart!.dps).toBeCloseTo(164 * 1.16, 6); // unaffected by the round-start bucket
   });
 
   it('the protocol damage-level bonus and enemy Damage Interference are separate multiplicative factors, not summed into the bracket', () => {
@@ -131,13 +138,13 @@ describe('damage: ally % sums in one bracket; protocol level bonus and enemy int
       side(enemyOwned),
     );
 
-    const expected = 120 * (1 + 0.16) * (1 + 0.12) * (1 - 0.03);
+    const expected = 164 * (1 + 0.16) * (1 + 0.12) * (1 - 0.03);
     expect(unit!.dps).toBeCloseTo(expected, 6);
 
     // The trap: folding the +12% protocol bonus into the SAME bracket as the
     // +16% module sum would give 120 x (1 + 0.16 + 0.12) x 0.97, a different
     // number. Assert the real result is not that.
-    const wrongBracket = 120 * (1 + 0.16 + 0.12) * (1 - 0.03);
+    const wrongBracket = 164 * (1 + 0.16 + 0.12) * (1 - 0.03);
     expect(unit!.dps).not.toBeCloseTo(wrongBracket, 6);
   });
 
@@ -148,8 +155,8 @@ describe('damage: ally % sums in one bracket; protocol level bonus and enemy int
       [],
       emptySide(),
     );
-    expect(duelistUnit!.dps).toBeCloseTo(120 * 1.48, 6);
-    expect(vanguardUnit!.dps).toBeCloseTo(78 * 1.48, 6); // Captain America baseDps 78, boosted too
+    expect(duelistUnit!.dps).toBeCloseTo(164 * 1.48, 6);
+    expect(vanguardUnit!.dps).toBeCloseTo(80 * 1.48, 6); // Captain America baseDps 80 (M11), boosted too
   });
 });
 
@@ -157,8 +164,8 @@ describe('healing mirrors the damage order', () => {
   it('Reboot healing-level bonus is a separate factor from the ally healing% bracket', () => {
     const owned: OwnedModule[] = [{ moduleId: 'reboot-healing-enhancement', stars: 1 }]; // +8%
     const [unit] = resolveUnits(['mantis'], side(owned, levels({ reboot: 1 })), [], emptySide());
-    // Mantis baseHealPerSecond 74, Reboot L1 = +12%
-    const expected = 74 * 1.08 * 1.12;
+    // Mantis baseHealPerSecond 81 (M11), Reboot L1 = +12%
+    const expected = 81 * 1.08 * 1.12;
     expect(unit!.healPerSecond).toBeCloseTo(expected, 6);
   });
 
@@ -166,7 +173,7 @@ describe('healing mirrors the damage order', () => {
     const enemyOwned: OwnedModule[] = [{ moduleId: 'reboot-healing-suppression', stars: 1 }]; // -1% per Strategist
     const enemyLineup = ['mantis', 'loki']; // 2 Strategists -> -2%
     const [unit] = resolveUnits(['ultron'], side([]), enemyLineup, side(enemyOwned));
-    expect(unit!.healPerSecond).toBeCloseTo(72 * 0.98, 6); // Ultron healPerSecond 72
+    expect(unit!.healPerSecond).toBeCloseTo(81 * 0.98, 6); // Ultron healPerSecond 81 (M11)
   });
 
   it('non-Strategists resolve with zero base and zero resolved healing', () => {
@@ -188,7 +195,7 @@ describe('other module stats land on the resolved unit (broad coverage)', () => 
     // TWO_TWO_TWO index 2 is black-widow, a Duelist: Onslaught modules apply
     // to her; Equilibrium modules apply to everyone at x3 (3 unique roles).
     const [unit] = resolveUnits(TWO_TWO_TWO, side(owned), TWO_TWO_TWO, side(owned)).slice(2, 3);
-    expect(unit!.attackSpeed).toBeCloseTo(0.9 * 1.08, 6); // Black Widow base attackSpeed 0.9
+    expect(unit!.attackSpeed).toBeCloseTo(2.5 * 1.08, 6); // Black Widow base attackSpeed 2.5 (M11)
     expect(unit!.ultChargeRate).toBeCloseTo(1.2, 6);
     expect(unit!.lifestealPct).toBeCloseTo(4, 6);
     // damageTaken factors are multiplicative, not additive: (1-0.02) x (1-0.01x3)

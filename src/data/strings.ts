@@ -291,3 +291,42 @@ export const FONT_FAMILY_STACK =
 
 /** Compose a Canvas2D `font` value: `battleFont('800 italic 16px')`. */
 export const battleFont = (sizeAndStyle: string): string => `${sizeAndStyle} ${FONT_FAMILY_STACK}`;
+
+// ===========================================================================
+// REPLICA-LOCAL strings — OURS, not the game's
+// ===========================================================================
+//
+// Everything below is UI the original *Ultron's Battle Matrix Protocol* never
+// had: the seed-entry / share affordance (M11), the `?debug=1` developer
+// overlay (M11), and the colour-blind palette toggle (M11). It is kept out of
+// the verbatim in-game-string body above so `data.spec.ts`'s canonical-text
+// snapshot stays an honest record of the *game's* copy, and grouped here so a
+// reviewer can see at a glance which strings are the replica's own. These are
+// still snapshot-tested (against accidental edits) but they carry no fidelity
+// claim.
+
+// --- Seed entry + shareable seed (M11 §3b) ---------------------------------
+export const SEED_LABEL = 'SEED';
+/** Current-seed readout in the persistent chrome: `SEED 20250606`. */
+export const seedReadout = (seed: number): string => `${SEED_LABEL} ${seed}`;
+export const SEED_INPUT_LABEL = 'Match seed';
+export const SEED_PLAY = 'PLAY SEED';
+export const SEED_COPY_LINK = 'COPY LINK';
+export const SEED_LINK_COPIED = 'Link copied';
+export const SEED_COPY_FAILED = 'Copy failed — select the URL';
+export const SEED_HINT = 'Same seed replays the same match. Share the link.';
+
+// --- `?debug=1` overlay (M11 §3c) -----------------------------------------
+export const DEBUG_TITLE = 'DEBUG';
+export const DEBUG_RESOLVED_STATS = 'Resolved stats';
+export const DEBUG_EVENT_LOG = 'Event log';
+export const DEBUG_NO_SELECTION = 'click a unit';
+export const DEBUG_TICKS = 'ticks';
+export const DEBUG_FRAMES = 'frames';
+export const DEBUG_SPEED_UP = 'SPEED UP';
+export const DEBUG_HINT = '?debug=1 overlay — read-only, inert without the flag';
+
+// --- Colour-blind-safe palette toggle (M11 §3e) --------------------------
+export const CB_MODE_LABEL = 'Colour-blind assist';
+export const CB_MODE_ON = 'High-contrast role shapes + labels on';
+export const CB_MODE_OFF = 'High-contrast role shapes + labels off';

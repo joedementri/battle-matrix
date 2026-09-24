@@ -43,62 +43,64 @@ function replay(seed: number): ReplayOutcome {
   };
 }
 
-// ---- COMMITTED (regenerated 2026-09-02 — M10: Strengthen Modules) -----------
-//      M10 gives all 76 sourced Strengthen Modules a real combat implementation
-//      (passive stat folds + `onUlt` self-buff windows) and threads each
-//      player's equipped Strengthen loadout into the resolver. Every player
-//      picks up Strengthen Modules from the Practice-round rewards, so from
-//      round 2 on both sides of every PvP battle now carry live Strengthen
-//      effects — outcomes, placements and state hashes move accordingly, and
-//      a few matches end a round or two sooner (buffed lineups kill faster).
-//      This is the intended consequence of wiring M10, not a regression.
+// ---- COMMITTED (regenerated 2026-09-03 — M11: balance + HP-loss re-fit) -----
+//      M11 re-tuned every per-hero combat stat in heroes.json against the
+//      per-hero win-rate gate (heroes of equal baseHealth converge to
+//      near-identical combat numbers under that constraint) and re-fitted the
+//      DERIVED HP-loss coefficients (divisor 5 -> 9, survivor range [1,6] ->
+//      [1,2]; see authored.ts HP_LOSS_* + docs/FIDELITY.md). Combat outcomes,
+//      placements, state hashes and match length all move accordingly — the
+//      intended consequence of the re-tune, not a regression.
+//
+//      Match length note: a gate-3-compliant per-round HP loss (mean ≤ 3.5)
+//      cannot also eliminate a 50-HP field by ~round 18, so AI matches now run
+//      ~36–40 rounds and some resolve at the round-40 cap by highest remaining
+//      health (seeds 2024 and 918273 below). Documented in FIDELITY / QA.
 //
 //      No determinism guarantee was weakened: `tests/determinism.spec.ts`
 //      (stub resolver, self-referential) and `combat.spec.ts` / `match.spec.ts`
-//      (compute their own ref in-run) are untouched and green. A battle with no
-//      Strengthen modules keeps its pre-M10 digest byte-for-byte (the new
-//      `strenUltTicks` hash fold only contributes while an `onUlt` window is
-//      live). Regenerated via `REGEN_REPLAYS=1` and re-run twice for stability.
+//      (compute their own ref in-run) stay green. Regenerated via
+//      `REGEN_REPLAYS=1` and re-run twice for stability.
 const COMMITTED: readonly ReplayOutcome[] = [
   {
     seed: 11,
     winnerId: 1,
-    finalRound: 24,
-    placements: [6, 1, 2, 4, 5, 3],
-    boundaryCount: 78,
-    finalStateHash: 'e1e013e259ca66150d3ea5d6d0ba4439',
+    finalRound: 38,
+    placements: [6, 1, 3, 2, 4, 5],
+    boundaryCount: 120,
+    finalStateHash: '8449725d0dfbbd03fb01c85f30829120',
   },
   {
     seed: 2024,
-    winnerId: 2,
-    finalRound: 26,
-    placements: [6, 2, 1, 5, 3, 4],
-    boundaryCount: 84,
-    finalStateHash: '0101e8dfb338488f80bcb17f281fa89e',
+    winnerId: 1,
+    finalRound: 40,
+    placements: [6, 1, 3, 5, 4, 2],
+    boundaryCount: 126,
+    finalStateHash: 'b6e575678f0a42ece853e30a1cef5e63',
   },
   {
     seed: 424242,
     winnerId: 2,
-    finalRound: 29,
-    placements: [6, 2, 1, 4, 5, 3],
-    boundaryCount: 93,
-    finalStateHash: 'a9cb6f3e4b29c9cd913a11148f9e7fc9',
+    finalRound: 36,
+    placements: [6, 3, 1, 2, 4, 5],
+    boundaryCount: 114,
+    finalStateHash: '7bc1cd5e5c5796b060ce872c498eb941',
   },
   {
     seed: 918273,
-    winnerId: 3,
-    finalRound: 28,
-    placements: [6, 2, 3, 1, 4, 5],
-    boundaryCount: 90,
-    finalStateHash: '0232814b17996457379d40d4ea597eb9',
+    winnerId: 5,
+    finalRound: 40,
+    placements: [6, 3, 2, 4, 5, 1],
+    boundaryCount: 126,
+    finalStateHash: 'd436e32e7e0bc0d57ffaa8a9d5a2f437',
   },
   {
     seed: 12648430,
-    winnerId: 1,
-    finalRound: 25,
-    placements: [6, 1, 3, 5, 4, 2],
-    boundaryCount: 81,
-    finalStateHash: 'a740dbf2df23a8d5c54348ad26217e00',
+    winnerId: 5,
+    finalRound: 39,
+    placements: [6, 2, 3, 5, 4, 1],
+    boundaryCount: 123,
+    finalStateHash: '7a94c6a1bb73495c7cdff3db30e5ace7',
   },
 ];
 // ---- /COMMITTED --------------------------------------------------------------

@@ -65,6 +65,7 @@
   --bm-topbar-h: 74px;
   --bm-radius: 6px;
   --bm-gap: 12px;
+  --bm-disclaimer-h: 20px;
 
   color-scheme: dark;
   --bm-font: "Roboto Condensed", "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
@@ -96,8 +97,97 @@ body {
 
 #app {
   position: fixed;
-  inset: 0;
+  /* Leave room for the persistent fan-project disclaimer strip along the bottom. */
+  inset: 0 0 var(--bm-disclaimer-h, 20px) 0;
   overflow: hidden;
+}
+
+/* =========================================================================
+   Fan-project disclaimer — persistent, prominent, never blocks a control
+   ========================================================================= */
+
+#fan-disclaimer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--bm-disclaimer-h);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  margin: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--bm-ink-dim);
+  background: var(--bm-ground-sunken);
+  border-top: 1px solid var(--bm-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 900px) {
+  #fan-disclaimer { font-size: 0.56rem; }
+}
+
+/* =========================================================================
+   Seed entry + shareable seed (M11) — persistent top-right widget
+   ========================================================================= */
+
+#bm-seedbar {
+  position: fixed;
+  top: 4px;
+  right: 6px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  background: color-mix(in srgb, var(--bm-ground-sunken) 92%, transparent);
+  border: 1px solid var(--bm-border);
+  border-radius: var(--bm-radius);
+  font-size: 0.66rem;
+}
+.bm-seedbar__label {
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  color: var(--bm-accent);
+}
+.bm-seedbar__input {
+  width: 8.5ch;
+  padding: 2px 4px;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--bm-ink);
+  background: var(--bm-ground);
+  border: 1px solid var(--bm-border);
+  border-radius: 3px;
+}
+.bm-seedbar__btn {
+  padding: 2px 7px;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+.bm-seedbar__status {
+  min-width: 0;
+  max-width: 16ch;
+  color: var(--bm-cyan);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bm-seedbar__input:focus-visible,
+.bm-seedbar__btn:focus-visible {
+  outline: 2px solid var(--bm-accent);
+  outline-offset: 1px;
+}
+@media (max-width: 1024px) {
+  #bm-seedbar { font-size: 0.6rem; gap: 3px; padding: 2px 4px; }
+  .bm-seedbar__status { display: none; }
 }
 
 button {
@@ -1159,18 +1249,23 @@ button {
 }
 .bm-cursor-mode b { color: var(--bm-accent); }
 
-/* `?debug` battle frame-timing readout */
+/* `?debug=1` overlay — frame timings + resolved stats + event log (M11) */
 [data-bm-debug] {
   position: fixed;
   left: 6px;
-  top: 6px;
+  top: 34px;
   z-index: 99;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-width: min(46ch, 90vw);
+  max-height: calc(100vh - 60px);
+  overflow: auto;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--bm-cyan);
-  background: #000000cc;
-  padding: 4px 6px;
-  pointer-events: none;
-  white-space: pre;
+  background: #000000d8;
+  border: 1px solid var(--bm-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  pointer-events: auto;
+  white-space: pre-wrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1219,6 +1314,97 @@ button {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* =========================================================================
+   Colour-blind assist (M11) — an OPT-IN OVERRIDE LAYER. It never changes a
+   canonical --bm-* hex (tests/theme.spec.ts guards those). Instead it makes
+   role / protocol identity legible without hue: fatter role SHAPES, a text
+   role chip on every hero token, and a distinct BORDER PATTERN + DOT SHAPE
+   per protocol.
+   ========================================================================= */
+
+:root[data-cb='1'] .bm-token__shape path,
+:root[data-cb='1'] .bm-token__shape polygon,
+:root[data-cb='1'] .bm-token__shape circle,
+:root[data-cb='1'] .bm-token__shape rect {
+  stroke-width: 10;
+}
+:root[data-cb='1'] .bm-token::after {
+  content: attr(data-role);
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  font-size: calc(var(--bm-token-size, 46px) * 0.2);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--bm-ink);
+  background: var(--bm-ground-sunken);
+  border: 1px solid var(--bm-border-strong);
+  border-radius: 3px;
+}
+
+/* Role / protocol cards — pattern the border by protocol, not just the hue. */
+:root[data-cb='1'] .bm-card--vanguard,
+:root[data-cb='1'] .bm-card--fortress {
+  border-style: solid;
+  border-width: 3px;
+}
+:root[data-cb='1'] .bm-card--duelist,
+:root[data-cb='1'] .bm-card--onslaught {
+  border-style: dashed;
+  border-width: 3px;
+}
+:root[data-cb='1'] .bm-card--strategist,
+:root[data-cb='1'] .bm-card--reboot {
+  border-style: dotted;
+  border-width: 3px;
+}
+:root[data-cb='1'] .bm-card--equilibrium {
+  border-style: double;
+  border-width: 4px;
+}
+:root[data-cb='1'] .bm-rolecard {
+  border-style: double;
+  border-width: 4px;
+}
+
+/* Scoreboard protocol dots — a distinct SHAPE per protocol. */
+:root[data-cb='1'] .bm-sb-proto--fortress .bm-sb-proto__dot {
+  border-radius: 0;
+}
+:root[data-cb='1'] .bm-sb-proto--onslaught .bm-sb-proto__dot {
+  border-radius: 50%;
+}
+:root[data-cb='1'] .bm-sb-proto--reboot .bm-sb-proto__dot {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+:root[data-cb='1'] .bm-sb-proto--equilibrium .bm-sb-proto__dot {
+  transform: rotate(45deg);
+}
+:root[data-cb='1'] .bm-sb-proto--strengthen .bm-sb-proto__dot {
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+
+/* Left-rail protocol icons — a role letter behind the glyph. */
+:root[data-cb='1'] .bm-rail__glyph {
+  border-width: 2px;
+}
+
+.bm-cb-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6rem;
+  color: var(--bm-ink-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bm-cb-toggle input {
+  accent-color: var(--bm-accent);
 }
 
 /* =========================================================================

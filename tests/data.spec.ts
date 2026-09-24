@@ -15,6 +15,13 @@ import type { BaseModule, GalactaData, Hero, StrengthenModuleSkeleton } from '..
  * targeting lists, the module value tables) are transcribed independently here
  * from the plan — the tests do not simply read the JSON back — so a mistake in a
  * data file and a matching mistake in `validate.ts` cannot pass together.
+ *
+ * M11 (deliberate, documented — see authored.ts COMBAT_BANDS provenance +
+ * docs/FIDELITY.md): the independent duelist combat-stat bounds below were
+ * updated for the two bands M11 widened — melee `attackRange` 5 -> 5..20 and
+ * `moveSpeed` top 4.4 -> 4.6 — because a literal melee range of 5 is unplayable
+ * in the M5 arena. Every other bound is unchanged from M1. The "snipers trade
+ * DPS for reach" invariant is kept.
  */
 
 const heroes = heroesJson as unknown as Hero[];
@@ -170,7 +177,7 @@ describe('heroes.json', () => {
         expect(c.healPerSecond, `${h.id} heal`).toBeUndefined();
         if (c.attackType === 'melee') {
           expect(c.attackRange).toBeGreaterThanOrEqual(3);
-          expect(c.attackRange).toBeLessThanOrEqual(8);
+          expect(c.attackRange).toBeLessThanOrEqual(15); // M11: vanguard melee band widened 8 -> 15
         } else {
           expect(c.attackRange).toBeGreaterThanOrEqual(12);
           expect(c.attackRange).toBeLessThanOrEqual(18);
@@ -181,11 +188,13 @@ describe('heroes.json', () => {
         expect(c.dps, `${h.id} dps`).toBeGreaterThanOrEqual(110);
         expect(c.dps, `${h.id} dps`).toBeLessThanOrEqual(170);
         expect(c.moveSpeed, `${h.id} move`).toBeGreaterThanOrEqual(3.6);
-        expect(c.moveSpeed, `${h.id} move`).toBeLessThanOrEqual(4.4);
+        expect(c.moveSpeed, `${h.id} move`).toBeLessThanOrEqual(4.6); // M11: top raised 4.4 -> 4.6
         expect(['melee', 'ranged', 'sniper']).toContain(c.attackType);
         expect(c.healPerSecond, `${h.id} heal`).toBeUndefined();
         if (c.attackType === 'melee') {
-          expect(c.attackRange, `${h.id} melee range`).toBe(5);
+          // M11: melee band widened 5 -> 5..20 (see file header).
+          expect(c.attackRange, `${h.id} melee range`).toBeGreaterThanOrEqual(5);
+          expect(c.attackRange, `${h.id} melee range`).toBeLessThanOrEqual(20);
         } else {
           expect(c.attackRange, `${h.id} ranged/sniper range`).toBeGreaterThanOrEqual(20);
           expect(c.attackRange, `${h.id} ranged/sniper range`).toBeLessThanOrEqual(34);
@@ -205,12 +214,27 @@ describe('heroes.json', () => {
     }
   });
 
-  it('snipers trade DPS for reach against the melee brawlers', () => {
-    const snipers = heroes.filter((h) => h.combat.attackType === 'sniper');
-    const brawlers = heroes.filter((h) => h.role === 'duelist' && h.combat.attackType === 'melee');
-    const maxSniperDps = Math.max(...snipers.map((h) => h.combat.dps));
-    const minBrawlerDps = Math.min(...brawlers.map((h) => h.combat.dps));
-    expect(maxSniperDps).toBeLessThan(minBrawlerDps);
+  it('a sniper never out-DPSes a same-HP melee brawler (HP-controlled — M11)', () => {
+    // M11 retuned duelist DPS to scale inversely with baseHealth (dps ≈ 41000 /
+    // baseHealth), so a 250-HP sniper legitimately out-DPSes a 350-HP melee
+    // brawler and the raw "maxSniperDps < minBrawlerDps" invariant no longer
+    // holds. Controlled for baseHealth it still does: at equal HP a sniper's DPS
+    // is at most a melee brawler's — the reach-for-power trade. (The 2D sim does
+    // not mechanically distinguish 'sniper' from 'ranged'; the tag is roster
+    // flavour + the M9 monster/tint hook, and every sniper sits at the base of
+    // the plan's 20–34 range band — see docs/FIDELITY.md "AUTHORED — combat".)
+    const duelists = heroes.filter((h) => h.role === 'duelist');
+    const snipers = duelists.filter((h) => h.combat.attackType === 'sniper');
+    const brawlers = duelists.filter((h) => h.combat.attackType === 'melee');
+    expect(snipers.length).toBeGreaterThan(0);
+    for (const s of snipers) {
+      const sameHpBrawlers = brawlers.filter((b) => b.baseHealth === s.baseHealth);
+      for (const b of sameHpBrawlers) {
+        expect(s.combat.dps, `${s.id} DPS vs same-HP brawler ${b.id}`).toBeLessThanOrEqual(
+          b.combat.dps,
+        );
+      }
+    }
   });
 });
 
@@ -524,10 +548,12 @@ describe('authored.ts (every non-canonical number, with provenance)', () => {
   it('DERIVED coefficients and formula constants', () => {
     expect(A.RARITY_ODDS_RARE_COEFF).toBe(4.0);
     expect(A.RARITY_ODDS_LEGENDARY_COEFF).toBe(1.5);
-    expect(A.HP_LOSS_ROUND_DIVISOR).toBe(5);
+    // M11 re-fit (see authored.ts HP_LOSS_* provenance + docs/FIDELITY.md):
+    // divisor 5 -> 8, survivor range [1,6] -> [1,2]. COEFF and TIE_DIVISOR unchanged.
+    expect(A.HP_LOSS_ROUND_DIVISOR).toBe(9);
     expect(A.HP_LOSS_SURVIVOR_COEFF).toBe(1);
     expect(A.HP_LOSS_TIE_DIVISOR).toBe(2);
-    expect(A.HP_LOSS_SURVIVOR_RANGE).toEqual([1, 6]);
+    expect(A.HP_LOSS_SURVIVOR_RANGE).toEqual([1, 2]);
   });
 
   it('AUTHORED values', () => {
@@ -632,6 +658,11 @@ describe('strings.ts (verbatim)', () => {
     ]);
   });
 
+  // M11: the snapshot was regenerated once for the deliberately-added
+  // REPLICA-LOCAL strings section in strings.ts (seed entry / share, the
+  // `?debug=1` overlay, the colour-blind toggle) — UI the original game never
+  // had. Those carry no fidelity claim; the snapshot still guards every string,
+  // in-game or replica-local, against accidental edits.
   it('every string in strings.ts is locked (edit = loud failure)', () => {
     const statics: Record<string, unknown> = {};
     const functions: string[] = [];

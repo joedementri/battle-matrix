@@ -27,6 +27,10 @@ export function heroToken(art: HeroArt, options: HeroTokenOptions = {}): HTMLEle
       role: 'img',
       'aria-label': label,
       'data-hero': art.heroId,
+      // Redundant, non-colour role cue for the colour-blind-assist mode
+      // (`:root[data-cb="1"]` in theme.css shows it as a corner chip). The
+      // role SHAPE already encodes role; this adds a text fallback.
+      'data-role': art.displayRole,
     },
     svg(
       'svg',
